@@ -106,6 +106,11 @@ function drawEdgeLabel(ctx: CanvasRenderingContext2D, scene: CanvasScene, edge: 
 }
 
 function drawNode(ctx: CanvasRenderingContext2D, scene: CanvasScene, node: SceneNode) {
+  if (node.variant === "compact") {
+    drawCompactNode(ctx, scene, node);
+    return;
+  }
+
   const scale = scene.scale;
   const palette = canvasTheme.node[node.tone];
   const iconSize = 24 * scale;
@@ -150,6 +155,41 @@ function drawNode(ctx: CanvasRenderingContext2D, scene: CanvasScene, node: Scene
     });
   }
 
+  ctx.restore();
+}
+
+function drawCompactNode(ctx: CanvasRenderingContext2D, scene: CanvasScene, node: SceneNode) {
+  const scale = scene.scale;
+  const palette = canvasTheme.node[node.tone];
+  const iconSize = 18 * scale;
+  const iconX = node.rect.x + 9 * scale;
+  const iconY = node.rect.y + 10 * scale;
+  const textX = node.rect.x + 31 * scale;
+  const textWidth = node.rect.w - 40 * scale;
+
+  ctx.save();
+  ctx.shadowColor = node.selected ? "rgba(11, 140, 155, 0.06)" : "rgba(16, 24, 40, 0.018)";
+  ctx.shadowBlur = node.selected ? 5 * scale : 3 * scale;
+  ctx.shadowOffsetY = 1 * scale;
+  ctx.fillStyle = "rgba(255, 255, 255, 0.92)";
+  ctx.strokeStyle = node.selected ? canvasTheme.teal : palette.stroke;
+  ctx.lineWidth = node.selected ? 1.05 * scale : 0.75 * scale;
+  roundedRect(ctx, node.rect.x, node.rect.y, node.rect.w, node.rect.h, 8 * scale);
+  ctx.fill();
+  ctx.stroke();
+  ctx.shadowColor = "transparent";
+
+  drawIcon(ctx, node.icon, iconX, iconY, iconSize, palette.accent);
+  ctx.textAlign = "left";
+  ctx.textBaseline = "alphabetic";
+  ctx.fillStyle = canvasTheme.ink;
+  ctx.font = font(scene, 8.7, 600);
+  fillTrimmedText(ctx, node.title, textX, node.rect.y + 18 * scale, textWidth);
+  ctx.fillStyle = canvasTheme.muted;
+  ctx.font = font(scene, 8.2, 430);
+  if (node.subtitle) {
+    fillTrimmedText(ctx, node.subtitle, textX, node.rect.y + 31 * scale, textWidth);
+  }
   ctx.restore();
 }
 

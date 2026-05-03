@@ -9,6 +9,9 @@ from stationeers_phase_sort.models import (
     StageEvaluation,
 )
 
+SETPOINT_TEMPERATURE_EPSILON_KELVIN = 0.25
+SETPOINT_PRESSURE_EPSILON_KPA = 0.25
+
 
 def _solid_risk_stream_for_stage(stage: StageEvaluation) -> MaterialStream | None:
     solid_moles_by_name: dict[str, float] = {}
@@ -31,6 +34,38 @@ def _solid_risk_stream_for_stage(stage: StageEvaluation) -> MaterialStream | Non
     ).without_tiny_entries()
 
 
+def _equipment_kind_for_stage(stage: StageEvaluation) -> str:
+    input_pressure = stage.feed_stream.pressure_kpa
+    output_pressure = stage.pressure_kpa
+    if input_pressure is not None and output_pressure is not None:
+        pressure_delta = output_pressure - input_pressure
+        if pressure_delta > SETPOINT_PRESSURE_EPSILON_KPA:
+            return "compressor"
+        if pressure_delta < -SETPOINT_PRESSURE_EPSILON_KPA:
+            return (
+                "condensation_valve"
+                if stage.operation_kind == "condense"
+                else "expansion_valve"
+            )
+
+    input_temperature = stage.feed_stream.temperature_kelvin
+    output_temperature = stage.temperature_kelvin
+    if input_temperature is not None and output_temperature is not None:
+        temperature_delta = output_temperature - input_temperature
+        if temperature_delta < -SETPOINT_TEMPERATURE_EPSILON_KELVIN:
+            return "cooler"
+        if temperature_delta > SETPOINT_TEMPERATURE_EPSILON_KELVIN:
+            return "heater"
+
+    return (
+        "condensation_valve"
+        if stage.operation_kind == "condense"
+        else "evaporation_heater"
+        if stage.operation_kind == "evaporate"
+        else "conditioning_valve"
+    )
+
+
 def plan_to_process_graph(plan: SearchPlan) -> ProcessGraph:
     nodes: list[ProcessNode] = [
         ProcessNode("source", "source"),
@@ -38,6 +73,7 @@ def plan_to_process_graph(plan: SearchPlan) -> ProcessGraph:
     edges: list[ProcessEdge] = []
 
     previous_residue_node = "source"
+    unit_index = 1
     for record in plan.product_records:
         stage = record.stage
         stage_node_id = f"stage_{record.stage_index:02d}"
@@ -46,19 +82,14 @@ def plan_to_process_graph(plan: SearchPlan) -> ProcessGraph:
         solid_risk_node_id = f"solid_risk_{record.stage_index:02d}"
         solid_risk_stream = _solid_risk_stream_for_stage(stage)
 
-        operation_kind = (
-            "condensation_valve"
-            if stage.operation_kind == "condense"
-            else "evaporation_heater"
-            if stage.operation_kind == "evaporate"
-            else "conditioning_valve"
-        )
-        operation_node_id = f"{operation_kind}_{record.stage_index:02d}"
+        equipment_kind = _equipment_kind_for_stage(stage)
+        operation_node_id = f"{equipment_kind}_{record.stage_index:02d}"
         nodes.append(
             ProcessNode(
                 operation_node_id,
-                operation_kind,
+                equipment_kind,
                 {
+                    "unit_index": unit_index,
                     "stage_index": record.stage_index,
                     "target_substance": stage.target_name,
                     "operation_kind": stage.operation_kind,
@@ -70,12 +101,14 @@ def plan_to_process_graph(plan: SearchPlan) -> ProcessGraph:
                 },
             )
         )
+        unit_index += 1
 
         nodes.append(
             ProcessNode(
                 stage_node_id,
                 "phase_splitter",
                 {
+                    "unit_index": unit_index,
                     "stage_index": record.stage_index,
                     "target_substance": stage.target_name,
                     "selected_branch": stage.product_branch.value,
@@ -97,6 +130,7 @@ def plan_to_process_graph(plan: SearchPlan) -> ProcessGraph:
                 },
             )
         )
+        unit_index += 1
         nodes.append(
             ProcessNode(
                 product_node_id,
@@ -133,6 +167,7 @@ def plan_to_process_graph(plan: SearchPlan) -> ProcessGraph:
                     residue_node_id,
                     "residue",
                     {
+                        "unit_index": unit_index,
                         "stage_index": record.stage_index,
                         "residue_total_moles": stage.residue_stream.total_moles,
                         "temperature_kelvin": stage.residue_stream.temperature_kelvin,
@@ -140,6 +175,7 @@ def plan_to_process_graph(plan: SearchPlan) -> ProcessGraph:
                     },
                 )
             )
+            unit_index += 1
             edges.append(ProcessEdge(stage_node_id, residue_node_id, stage.residue_stream))
             previous_residue_node = residue_node_id
 

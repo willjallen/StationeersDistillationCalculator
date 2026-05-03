@@ -254,10 +254,10 @@ function sceneNodeForGraphNode(
       id: graphNode.node_id,
       rect: node.rect,
       tone: "equipment",
-      icon: graphNode.node_kind === "evaporation_heater" ? "heater" : "valve",
-      title: `${pad(node.stageIndex)} ${operationTitle(graphNode)}`,
+      icon: operationIcon(graphNode),
+      title: `${pad(displayIndexForNode(graphNode, node.stageIndex))} ${operationTitle(graphNode)}`,
       subtitle: `${numberText(paramNumber(graphNode, "output_temperature_kelvin"), 0)} K`,
-      lines: [`${numberText(paramNumber(graphNode, "output_pressure_kpa"), 0)} kPa`],
+      lines: [operationSetpointLine(graphNode)],
       selected: node.stageIndex === selectedStageIndex,
       stageIndex: node.stageIndex,
     };
@@ -296,9 +296,10 @@ function sceneNodeForGraphNode(
       rect: node.rect,
       tone: "recycle",
       icon: "recycle",
-      title: `${pad(node.stageIndex)} Residue`,
+      title: `${pad(displayIndexForNode(graphNode, node.stageIndex))} Recycle`,
       subtitle: `${numberText(paramNumber(graphNode, "residue_total_moles"), 1)} mol`,
       lines: [`${numberText(paramNumber(graphNode, "temperature_kelvin"), 0)} K`],
+      variant: "compact",
       stageIndex: node.stageIndex,
       selected: node.stageIndex === selectedStageIndex,
     };
@@ -405,17 +406,61 @@ function sortedStageNodes(nodes: ProcessGraphNode[]) {
 }
 
 function isOperationNode(node: ProcessGraphNode) {
-  return ["condensation_valve", "evaporation_heater", "conditioning_valve"].includes(node.node_kind);
+  return [
+    "compressor",
+    "cooler",
+    "heater",
+    "expansion_valve",
+    "condensation_valve",
+    "evaporation_heater",
+    "conditioning_valve",
+  ].includes(node.node_kind);
 }
 
 function operationTitle(node: ProcessGraphNode) {
+  if (node.node_kind === "compressor") {
+    return "Compressor";
+  }
+  if (node.node_kind === "cooler") {
+    return "Cooler";
+  }
+  if (node.node_kind === "heater" || node.node_kind === "evaporation_heater") {
+    return "Heater";
+  }
+  if (node.node_kind === "expansion_valve") {
+    return "Expansion Valve";
+  }
   if (node.node_kind === "condensation_valve") {
     return "Cond. Valve";
   }
-  if (node.node_kind === "evaporation_heater") {
-    return "Heater";
-  }
   return "Conditioning Valve";
+}
+
+function operationIcon(node: ProcessGraphNode) {
+  if (node.node_kind === "compressor") {
+    return "compressor";
+  }
+  if (node.node_kind === "cooler") {
+    return "cooler";
+  }
+  if (node.node_kind === "heater" || node.node_kind === "evaporation_heater") {
+    return "heater";
+  }
+  return "valve";
+}
+
+function operationSetpointLine(node: ProcessGraphNode) {
+  const inputPressure = paramNumber(node, "input_pressure_kpa");
+  const outputPressure = paramNumber(node, "output_pressure_kpa");
+  if (inputPressure !== null && outputPressure !== null && Math.abs(outputPressure - inputPressure) > 0.25) {
+    return `${numberText(inputPressure, 0)} → ${numberText(outputPressure, 0)} kPa`;
+  }
+  const inputTemperature = paramNumber(node, "input_temperature_kelvin");
+  const outputTemperature = paramNumber(node, "output_temperature_kelvin");
+  if (inputTemperature !== null && outputTemperature !== null && Math.abs(outputTemperature - inputTemperature) > 0.25) {
+    return `${numberText(inputTemperature, 0)} → ${numberText(outputTemperature, 0)} K`;
+  }
+  return `${numberText(outputPressure, 0)} kPa`;
 }
 
 function stageIndexForNode(node: ProcessGraphNode) {
@@ -452,6 +497,10 @@ function edgeTone(
 function paramNumber(node: ProcessGraphNode, key: string) {
   const value = node.parameters[key];
   return typeof value === "number" ? value : null;
+}
+
+function displayIndexForNode(node: ProcessGraphNode, fallback: number | undefined) {
+  return paramNumber(node, "unit_index") ?? fallback;
 }
 
 function pipeWidth(moles: number) {

@@ -74,29 +74,39 @@ function graphFromStages(items: Stage[]): PlanPayload["graph"] {
   const nodes: PlanPayload["graph"]["nodes"] = [{ node_id: "source", node_kind: "source", parameters: {} }];
   const edges: PlanPayload["graph"]["edges"] = [];
   let previous = "source";
+  let previousStream = stream(100, "Feed", 294.39, 100);
+  let unitIndex = 1;
   items.forEach((item) => {
     const stageId = `stage_${String(item.stage_index).padStart(2, "0")}`;
-    const operationKind = item.product_branch === "liquid" ? "condensation_valve" : "evaporation_heater";
+    const operationKind = equipmentKindForStage(previousStream, item);
     const operationId = `${operationKind}_${String(item.stage_index).padStart(2, "0")}`;
     const productId = `product_${item.target_name.toLowerCase().replaceAll(" ", "_")}`;
     const residueId = `residue_${String(item.stage_index).padStart(2, "0")}`;
-    const feed = stream(item.feed_total_moles, "Feed", item.temperature_kelvin, item.pressure_kpa);
+    const feed = {
+      ...previousStream,
+      total_moles: item.feed_total_moles,
+    };
     nodes.push({
       node_id: operationId,
       node_kind: operationKind,
       parameters: {
+        unit_index: unitIndex,
         stage_index: item.stage_index,
         target_substance: item.target_name,
         operation_kind: item.operation_kind,
         selected_branch: item.product_branch,
+        input_temperature_kelvin: previousStream.temperature_kelvin,
+        input_pressure_kpa: previousStream.pressure_kpa,
         output_temperature_kelvin: item.temperature_kelvin,
         output_pressure_kpa: item.pressure_kpa,
       },
     });
+    unitIndex += 1;
     nodes.push({
       node_id: stageId,
       node_kind: "phase_splitter",
       parameters: {
+        unit_index: unitIndex,
         stage_index: item.stage_index,
         target_substance: item.target_name,
         operation_kind: item.operation_kind,
@@ -105,6 +115,7 @@ function graphFromStages(items: Stage[]): PlanPayload["graph"] {
         pressure_kpa: item.pressure_kpa,
       },
     });
+    unitIndex += 1;
     nodes.push({
       node_id: productId,
       node_kind: "product_storage",
@@ -124,17 +135,38 @@ function graphFromStages(items: Stage[]): PlanPayload["graph"] {
         node_id: residueId,
         node_kind: "residue",
         parameters: {
+          unit_index: unitIndex,
           stage_index: item.stage_index,
           residue_total_moles: item.residue_total_moles,
           temperature_kelvin: item.residue_stream.temperature_kelvin,
           pressure_kpa: item.residue_stream.pressure_kpa,
         },
       });
+      unitIndex += 1;
       edges.push({ source_node_id: stageId, destination_node_id: residueId, stream: item.residue_stream });
       previous = residueId;
+      previousStream = item.residue_stream;
     }
   });
   return { nodes, edges };
+}
+
+function equipmentKindForStage(input: Stream, item: Stage) {
+  const pressureDelta = item.pressure_kpa - (input.pressure_kpa ?? item.pressure_kpa);
+  if (pressureDelta > 0.25) {
+    return "compressor";
+  }
+  if (pressureDelta < -0.25) {
+    return item.product_branch === "liquid" ? "condensation_valve" : "expansion_valve";
+  }
+  const temperatureDelta = item.temperature_kelvin - (input.temperature_kelvin ?? item.temperature_kelvin);
+  if (temperatureDelta < -0.25) {
+    return "cooler";
+  }
+  if (temperatureDelta > 0.25) {
+    return "heater";
+  }
+  return item.product_branch === "liquid" ? "condensation_valve" : "evaporation_heater";
 }
 
 function passesFor(index: number) {

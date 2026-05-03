@@ -61,10 +61,15 @@ def test_webview_plan_payload_is_strict_json_and_diagram_ready() -> None:
         if node["node_kind"] == "phase_splitter"
     ]
     assert "polishing_reached_target" in stage_nodes[0]["parameters"]
-    assert any(
-        node["node_kind"] == "condensation_valve"
+    equipment_nodes = [
+        node
         for node in graph["nodes"]  # type: ignore[index]
-    )
+        if node["node_kind"]
+        in {"compressor", "cooler", "heater", "expansion_valve", "condensation_valve"}
+    ]
+    assert equipment_nodes
+    assert "unit_index" in equipment_nodes[0]["parameters"]
+    assert any(node["node_kind"] == "compressor" for node in equipment_nodes)
     residue_nodes = [
         node
         for node in graph["nodes"]  # type: ignore[index]

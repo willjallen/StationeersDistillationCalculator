@@ -42,6 +42,7 @@ export type SceneNode = {
   lines?: string[];
   rows?: Array<{ label: string; value: string; tone: "gas" | "liquid" | "risk" }>;
   badge?: string;
+  variant?: "compact";
   stageIndex?: number;
   selected?: boolean;
 };
