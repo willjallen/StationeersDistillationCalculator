@@ -1,0 +1,19 @@
+- name: heater
+  device_kind: heater
+  parameters: {}
+- name: cooler
+  device_kind: cooler
+  parameters: {}
+- name: compressor
+  device_kind: compressor
+  parameters:
+    maximum_pressure_kpa: 6000.0
+- name: pressure_regulator
+  device_kind: pressure_regulator
+  parameters: {}
+- name: phase_splitter
+  device_kind: phase_splitter
+  parameters: {}
+- name: storage_tank
+  device_kind: storage
+  parameters: {}

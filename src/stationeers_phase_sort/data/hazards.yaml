@@ -1,0 +1,16 @@
+- name: Hydrogen/Oxygen autoignition risk
+  threshold_temperature_kelvin: 573.15
+  reactants: [Hydrogen, Oxygen]
+  severity: high
+- name: Hydrogen/Nitrous Oxide autoignition risk
+  threshold_temperature_kelvin: 323.15
+  reactants: [Hydrogen, Nitrous Oxide]
+  severity: extreme
+- name: Fuel/Ozone hot oxidizer risk
+  threshold_temperature_kelvin: 323.15
+  reactants: [Ozone, Hydrogen]
+  severity: medium
+- name: Methane/Ozone hot oxidizer risk
+  threshold_temperature_kelvin: 323.15
+  reactants: [Ozone, Methane]
+  severity: medium
