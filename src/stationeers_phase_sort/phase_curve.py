@@ -21,7 +21,11 @@ class PhaseCurve:
         _validate_curve_points(substance.name, self.curve_points)
 
     def vapor_pressure_kpa(self, temperature_kelvin: float) -> PhaseBoundaryResult:
-        log_pressure, slope = log_vapor_pressure_and_slope(self.substance, temperature_kelvin)
+        log_pressure, slope = log_vapor_pressure_and_slope_from_points(
+            self.substance,
+            self.curve_points,
+            temperature_kelvin,
+        )
         if log_pressure is None:
             return PhaseBoundaryResult(BoundaryStatus.SOLID_RISK, None, slope)
         if math.isinf(log_pressure):
@@ -87,6 +91,18 @@ def log_vapor_pressure_and_slope(
     substance: Substance,
     temperature_kelvin: float,
 ) -> tuple[float | None, float]:
+    return log_vapor_pressure_and_slope_from_points(
+        substance,
+        build_curve_points(substance),
+        temperature_kelvin,
+    )
+
+
+def log_vapor_pressure_and_slope_from_points(
+    substance: Substance,
+    curve_points: list[CurvePoint],
+    temperature_kelvin: float,
+) -> tuple[float | None, float]:
     if not substance.can_phase_change:
         return math.inf, 0.0
 
@@ -99,7 +115,6 @@ def log_vapor_pressure_and_slope(
     if temperature_kelvin > substance.maximum_liquid_temperature_kelvin:
         return math.inf, 0.0
 
-    curve_points = build_curve_points(substance)
     if len(curve_points) < 2:
         return None, 0.0
 
