@@ -6,7 +6,9 @@
   "scripts": {
     "build:web": "vite build",
     "check:web": "tsc --noEmit",
-    "screenshot": "playwright screenshot --viewport-size=1440,900 http://127.0.0.1:8765/ webview-screenshot.png"
+    "capture:web": "node web_src/scripts/capture-webview.mjs",
+    "capture:target": "node web_src/scripts/capture-webview.mjs --url http://127.0.0.1:8765/?snapshot=1 --width 1448 --height 1086 --output .tmp-smoke/webui-current.png",
+    "smoke:web": "node web_src/scripts/visual-smoke.mjs"
   },
   "dependencies": {
     "@vitejs/plugin-react": "^5.1.1",

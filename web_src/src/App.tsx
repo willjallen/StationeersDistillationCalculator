@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { numberText, percentText, shortName } from "./format";
 import { PlanCanvas } from "./PlanCanvas";
+import { samplePlan } from "./samplePlan";
 import type { MetaPayload, PlanPayload, PlanRequest, Stage, Substance } from "./types";
 import "./styles.css";
 
@@ -21,12 +22,28 @@ const initialComposition: Record<string, number> = {
   Hydrogen: 25,
   Methane: 20,
   Ozone: 14.286,
+  "Nitrous Oxide": 16.667,
+  Pollutant: 12.5,
+  Water: 11.111,
 };
 
+const fallbackSubstances: Substance[] = [
+  { name: "Carbon Dioxide", formula: "CO2", phase_change_enabled: true, hazard_tags: [] },
+  { name: "Nitrogen", formula: "N2", phase_change_enabled: true, hazard_tags: [] },
+  { name: "Oxygen", formula: "O2", phase_change_enabled: true, hazard_tags: [] },
+  { name: "Hydrogen", formula: "H2", phase_change_enabled: true, hazard_tags: [] },
+  { name: "Methane", formula: "CH4", phase_change_enabled: true, hazard_tags: [] },
+  { name: "Ozone", formula: "O3", phase_change_enabled: true, hazard_tags: [] },
+  { name: "Nitrous Oxide", formula: "N2O", phase_change_enabled: true, hazard_tags: [] },
+  { name: "Pollutant", formula: "X", phase_change_enabled: true, hazard_tags: [] },
+  { name: "Water", formula: "H2O", phase_change_enabled: true, hazard_tags: [] },
+];
+
 function App() {
+  const snapshotMode = new URLSearchParams(window.location.search).has("snapshot");
   const [meta, setMeta] = useState<MetaPayload | null>(null);
-  const [plan, setPlan] = useState<PlanPayload | null>(null);
-  const [status, setStatus] = useState("Loading");
+  const [plan, setPlan] = useState<PlanPayload | null>(snapshotMode ? samplePlan : null);
+  const [status, setStatus] = useState(snapshotMode ? "Saved 2m ago" : "Loading");
   const [running, setRunning] = useState(false);
   const [preset, setPreset] = useState("base-air");
   const [selected, setSelected] = useState<string[]>(targetSelection);
@@ -48,21 +65,28 @@ function App() {
   });
 
   useEffect(() => {
+    document.body.classList.toggle("snapshot-mode", snapshotMode);
+    return () => {
+      document.body.classList.remove("snapshot-mode");
+    };
+  }, [snapshotMode]);
+
+  useEffect(() => {
     fetch("/api/meta")
       .then((response) => response.json())
       .then((payload: MetaPayload) => {
         setMeta(payload);
-        setStatus("Ready");
+        setStatus(snapshotMode ? "Saved 2m ago" : "Ready");
       })
       .catch((error: Error) => setStatus(error.message));
-  }, []);
+  }, [snapshotMode]);
 
   useEffect(() => {
-    if (meta) {
+    if (meta && !snapshotMode) {
       void runPlan();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [meta]);
+  }, [meta, snapshotMode]);
 
   const selectedStage = useMemo(() => {
     if (!plan?.stages.length) {
@@ -72,6 +96,38 @@ function App() {
       plan.stages.find((stage) => stage.stage_index === selectedStageIndex) ?? plan.stages[0]
     );
   }, [plan, selectedStageIndex]);
+
+  useEffect(() => {
+    let frame = 0;
+    const updateProbe = () => {
+      frame = window.requestAnimationFrame(() => {
+        const shell = document.querySelector<HTMLElement>(".shell");
+        const canvas = document.querySelector<HTMLElement>(".canvas-wrap");
+        const shellRect = shell?.getBoundingClientRect();
+        const canvasRect = canvas?.getBoundingClientRect();
+        const root = document.documentElement;
+        const scrollX = Math.max(0, root.scrollWidth - window.innerWidth, document.body.scrollWidth - window.innerWidth);
+        const scrollY = Math.max(0, root.scrollHeight - window.innerHeight, document.body.scrollHeight - window.innerHeight);
+        document.body.dataset.visualSmoke = [
+          `viewportW=${window.innerWidth}`,
+          `viewportH=${window.innerHeight}`,
+          `shellW=${Math.round(shellRect?.width ?? 0)}`,
+          `shellH=${Math.round(shellRect?.height ?? 0)}`,
+          `canvasW=${Math.round(canvasRect?.width ?? 0)}`,
+          `canvasH=${Math.round(canvasRect?.height ?? 0)}`,
+          `scrollX=${Math.ceil(scrollX)}`,
+          `scrollY=${Math.ceil(scrollY)}`,
+        ].join(";");
+      });
+    };
+
+    updateProbe();
+    window.addEventListener("resize", updateProbe);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener("resize", updateProbe);
+    };
+  }, [plan, selectedStageIndex, status]);
 
   function updateInput(key: keyof typeof inputs, value: number) {
     setInputs((current) => ({ ...current, [key]: value }));
@@ -132,7 +188,7 @@ function App() {
     }
   }
 
-  const substances = meta?.substances ?? [];
+  const substances = meta?.substances ?? (snapshotMode ? fallbackSubstances : []);
 
   return (
     <div className="shell">
@@ -162,8 +218,8 @@ function App() {
           setSearchMode={setSearchMode}
         />
       </aside>
+      <KpiStrip plan={plan} />
       <main className="main-panel">
-        <KpiStrip plan={plan} />
         <section className="plan-card">
           <div className="card-title-row">
             <div>
@@ -250,19 +306,20 @@ function FeedComposition({
   onToggle: (name: string) => void;
   onComposition: (name: string, value: number) => void;
 }) {
-  const visible = substances.filter((substance) =>
-    [
-      "Carbon Dioxide",
-      "Nitrogen",
-      "Oxygen",
-      "Hydrogen",
-      "Methane",
-      "Ozone",
-      "Nitrous Oxide",
-      "Pollutant",
-      "Water",
-    ].includes(substance.name),
-  );
+  const visibleOrder = [
+    "Carbon Dioxide",
+    "Nitrogen",
+    "Oxygen",
+    "Hydrogen",
+    "Methane",
+    "Ozone",
+    "Nitrous Oxide",
+    "Pollutant",
+    "Water",
+  ];
+  const visible = visibleOrder
+    .map((name) => substances.find((substance) => substance.name === name))
+    .filter((substance): substance is Substance => Boolean(substance));
   return (
     <section className="side-card feed-card">
       <h2>Feed Composition <span>(mol%)</span></h2>
@@ -366,6 +423,13 @@ function Optimization({
         <button className={searchMode === "greedy" ? "active" : ""} type="button" onClick={() => setSearchMode("greedy")}>Purity</button>
         <button className={searchMode === "beam" ? "active" : ""} type="button" onClick={() => setSearchMode("beam")}>Energy</button>
       </div>
+      <label className="goal-select">
+        <select defaultValue="purity">
+          <option value="purity">Maximize minimum purity</option>
+          <option value="yield">Maximize recovered moles</option>
+          <option value="risk">Avoid solid formation</option>
+        </select>
+      </label>
     </section>
   );
 }
