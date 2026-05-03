@@ -4,7 +4,7 @@ import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
 const args = parseArgs(process.argv.slice(2));
-const url = args.url ?? process.env.WEBVIEW_URL ?? "http://127.0.0.1:8765/?snapshot=1&smoke=1";
+const url = args.url ?? process.env.WEBVIEW_URL ?? "http://127.0.0.1:8765/?functional-smoke=1";
 const chrome = args.chrome ?? process.env.CHROME_PATH ?? findChrome();
 
 if (!chrome) {
@@ -28,16 +28,16 @@ const { stdout } = await execFileAsync(
     "--disable-sync",
     "--force-device-scale-factor=1",
     "--window-size=1470,1190",
-    "--virtual-time-budget=1000",
+    "--virtual-time-budget=8000",
     "--dump-dom",
     url,
   ],
-  { maxBuffer: 4 * 1024 * 1024, timeout: 15000 },
+  { maxBuffer: 4 * 1024 * 1024, timeout: 20000 },
 );
 
-const match = stdout.match(/data-visual-smoke="([^"]+)"/);
+const match = stdout.match(/data-functional-smoke="([^"]+)"/);
 if (!match) {
-  throw new Error("Visual smoke probe was not written to the DOM.");
+  throw new Error("Functional smoke probe was not written to the DOM.");
 }
 
 const probe = Object.fromEntries(
@@ -48,23 +48,12 @@ const probe = Object.fromEntries(
     .map((pair) => pair.split("=")),
 );
 
-const failures = [];
-if (probe.scrollX !== "0" || probe.scrollY !== "0") {
-  failures.push(`page scroll detected (${probe.scrollX}, ${probe.scrollY})`);
-}
-if (Number(probe.canvasW) < 900 || Number(probe.canvasH) < 520) {
-  failures.push(`canvas too small (${probe.canvasW}x${probe.canvasH})`);
-}
-if (Number(probe.shellW) < 1448 || Number(probe.shellH) < 1086) {
-  failures.push(`shell mismatch (${probe.shellW}x${probe.shellH})`);
-}
-
-if (failures.length) {
-  throw new Error(`Visual smoke failed: ${failures.join(", ")}`);
+if (probe.status !== "passed") {
+  throw new Error(`Functional smoke failed: ${probe.message ?? "unknown failure"}`);
 }
 
 console.log(
-  `Visual smoke passed: viewport=${probe.viewportW}x${probe.viewportH}, canvas=${probe.canvasW}x${probe.canvasH}, scroll=0`,
+  `Functional smoke passed: base products=${probe.baseProducts}, all-gases products=${probe.allGasProducts}, graph nodes ${probe.baseGraphNodes}->${probe.allGasGraphNodes}, selected feed=${probe.checkedFeed}`,
 );
 
 function parseArgs(items) {

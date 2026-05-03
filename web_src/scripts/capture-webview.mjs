@@ -15,9 +15,13 @@ const windowsChrome = chrome?.toLowerCase().endsWith(".exe") ?? false;
 const chromeExtraHeight = windowsChrome
   ? Number(args.chromeExtraHeight ?? process.env.WEBVIEW_CHROME_EXTRA_HEIGHT ?? 104)
   : 0;
+const chromeExtraWidth = windowsChrome
+  ? Number(args.chromeExtraWidth ?? process.env.WEBVIEW_CHROME_EXTRA_WIDTH ?? 22)
+  : 0;
+const captureWidth = width + chromeExtraWidth;
 const captureHeight = height + chromeExtraHeight;
 const rawOutput =
-  chromeExtraHeight > 0
+  chromeExtraHeight > 0 || chromeExtraWidth > 0
     ? resolve(dirname(output), `capture-${process.pid}-${Date.now()}-raw.png`)
     : output;
 
@@ -37,7 +41,7 @@ const chromeArgs = [
   "--disable-sync",
   "--disable-extensions",
   "--force-device-scale-factor=1",
-  `--window-size=${width},${captureHeight}`,
+  `--window-size=${captureWidth},${captureHeight}`,
   `--screenshot=${pathForChrome(rawOutput, chrome)}`,
   url,
 ];

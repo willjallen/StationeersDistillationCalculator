@@ -51,13 +51,13 @@ function drawEdge(ctx: CanvasRenderingContext2D, scene: CanvasScene, edge: Scene
   ctx.lineWidth = edge.width * scene.scale;
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
-  ctx.shadowColor = edge.tone === "recycle" ? "rgba(69, 82, 98, 0.18)" : "rgba(15, 23, 42, 0.12)";
-  ctx.shadowBlur = 2;
-  ctx.shadowOffsetY = 1;
+  ctx.shadowColor = "rgba(15, 23, 42, 0.025)";
+  ctx.shadowBlur = 1;
+  ctx.shadowOffsetY = 0.25;
   if (edge.dashed) {
     ctx.setLineDash([8 * scene.scale, 7 * scene.scale]);
   }
-  drawRoundedRoute(ctx, edge.points, 18 * scene.scale);
+  drawRoundedRoute(ctx, edge.points, 10 * scene.scale);
   ctx.stroke();
   ctx.setLineDash([]);
   if (edge.arrow !== false) {
@@ -72,7 +72,7 @@ function drawArrowhead(ctx: CanvasRenderingContext2D, points: Point[], color: st
     return;
   }
   const angle = lastSegmentAngle(points);
-  const size = Math.max(7, lineWidth + 4);
+  const size = Math.max(6.5, lineWidth + 3.5);
   ctx.save();
   ctx.fillStyle = color;
   ctx.shadowColor = "transparent";
@@ -92,7 +92,7 @@ function drawEdgeLabel(ctx: CanvasRenderingContext2D, scene: CanvasScene, edge: 
   const point = edge.labelPoint ?? centerOf(edge.points);
   const scale = scene.scale;
   ctx.save();
-  ctx.font = font(scene, 10, 700);
+  ctx.font = font(scene, 9.4, 520);
   const width = ctx.measureText(edge.label).width + 12 * scale;
   const height = 20 * scale;
   ctx.fillStyle = "rgba(255, 255, 255, 0.94)";
@@ -109,18 +109,18 @@ function drawNode(ctx: CanvasRenderingContext2D, scene: CanvasScene, node: Scene
   const scale = scene.scale;
   const palette = canvasTheme.node[node.tone];
   const iconSize = 24 * scale;
-  const iconX = node.rect.x + 14 * scale;
+  const iconX = node.rect.x + 12 * scale;
   const iconY = node.rect.y + 18 * scale;
-  const textX = node.rect.x + 44 * scale;
-  const textWidth = node.rect.w - 55 * scale;
+  const textX = node.rect.x + 38 * scale;
+  const textWidth = node.rect.w - 45 * scale;
 
   ctx.save();
-  ctx.shadowColor = node.selected ? "rgba(11, 140, 155, 0.18)" : "rgba(16, 24, 40, 0.08)";
-  ctx.shadowBlur = node.selected ? 14 * scale : 10 * scale;
-  ctx.shadowOffsetY = 4 * scale;
+  ctx.shadowColor = node.selected ? "rgba(11, 140, 155, 0.075)" : "rgba(16, 24, 40, 0.032)";
+  ctx.shadowBlur = node.selected ? 8 * scale : 5 * scale;
+  ctx.shadowOffsetY = 2 * scale;
   ctx.fillStyle = palette.fill;
   ctx.strokeStyle = node.selected ? canvasTheme.teal : palette.stroke;
-  ctx.lineWidth = node.selected ? 2 * scale : 1 * scale;
+  ctx.lineWidth = node.selected ? 1.15 * scale : 0.9 * scale;
   roundedRect(ctx, node.rect.x, node.rect.y, node.rect.w, node.rect.h, 8 * scale);
   ctx.fill();
   ctx.stroke();
@@ -130,7 +130,7 @@ function drawNode(ctx: CanvasRenderingContext2D, scene: CanvasScene, node: Scene
   ctx.textAlign = "left";
   ctx.textBaseline = "alphabetic";
   ctx.fillStyle = canvasTheme.ink;
-  ctx.font = font(scene, node.tone === "separator" ? 11 : 10.5, 800);
+  ctx.font = font(scene, node.tone === "separator" ? 10.1 : 9.4, node.tone === "separator" ? 640 : 580);
   fillTrimmedText(ctx, node.title, textX, node.rect.y + 24 * scale, textWidth);
 
   if (node.badge) {
@@ -141,7 +141,7 @@ function drawNode(ctx: CanvasRenderingContext2D, scene: CanvasScene, node: Scene
     drawRows(ctx, scene, node);
   } else {
     ctx.fillStyle = canvasTheme.muted;
-    ctx.font = font(scene, 9.5, 550);
+    ctx.font = font(scene, 9, 450);
     if (node.subtitle) {
       fillTrimmedText(ctx, node.subtitle, textX, node.rect.y + 42 * scale, textWidth);
     }
@@ -157,9 +157,11 @@ function drawRows(ctx: CanvasRenderingContext2D, scene: CanvasScene, node: Scene
   const scale = scene.scale;
   const left = node.rect.x + 18 * scale;
   const right = node.rect.x + node.rect.w - 14 * scale;
-  ctx.font = font(scene, 9.5, 650);
-  node.rows?.slice(0, 3).forEach((row, index) => {
-    const y = node.rect.y + (52 + index * 21) * scale;
+  ctx.font = font(scene, 9, 500);
+  const rows = node.rows?.slice(0, 4) ?? [];
+  const rowGap = rows.length > 3 ? 17 : 21;
+  rows.forEach((row, index) => {
+    const y = node.rect.y + (50 + index * rowGap) * scale;
     drawMiniDroplet(ctx, left, y - 10 * scale, 12 * scale, canvasTheme.edge[row.tone as EdgeTone] ?? canvasTheme.liquid);
     ctx.fillStyle = canvasTheme.ink;
     fillTrimmedText(ctx, row.label, left + 18 * scale, y, 58 * scale);
@@ -170,7 +172,7 @@ function drawRows(ctx: CanvasRenderingContext2D, scene: CanvasScene, node: Scene
   });
   if (node.lines?.[0]) {
     ctx.fillStyle = canvasTheme.muted;
-    ctx.font = font(scene, 9, 550);
+    ctx.font = font(scene, 8.8, 480);
     ctx.textAlign = "center";
     fillTrimmedText(ctx, node.lines[0], node.rect.x + node.rect.w / 2, node.rect.y + node.rect.h - 12 * scale, node.rect.w - 24 * scale);
     ctx.textAlign = "left";
@@ -179,7 +181,7 @@ function drawRows(ctx: CanvasRenderingContext2D, scene: CanvasScene, node: Scene
 
 function drawBadge(ctx: CanvasRenderingContext2D, scene: CanvasScene, text: string, right: number, y: number) {
   ctx.save();
-  ctx.font = font(scene, 8.5, 800);
+  ctx.font = font(scene, 8.3, 650);
   const width = ctx.measureText(text).width + 14 * scene.scale;
   const height = 20 * scene.scale;
   ctx.fillStyle = "#dff6f2";
@@ -195,33 +197,59 @@ function drawBadge(ctx: CanvasRenderingContext2D, scene: CanvasScene, text: stri
 function drawMiniMap(ctx: CanvasRenderingContext2D, scene: CanvasScene) {
   const scale = scene.scale;
   const x = 18 * scale;
-  const y = scene.height - 132 * scale;
-  const w = 205 * scale;
-  const h = 112 * scale;
+  const y = scene.height - 200 * scale;
+  const w = 225 * scale;
+  const h = 155 * scale;
   const bounds = nodeBounds(scene.nodes);
   ctx.save();
   ctx.fillStyle = "rgba(255, 255, 255, 0.96)";
-  ctx.strokeStyle = canvasTheme.line;
+  ctx.strokeStyle = "#e8eef3";
   ctx.lineWidth = 1;
   roundedRect(ctx, x, y, w, h, 8 * scale);
   ctx.fill();
   ctx.stroke();
   ctx.fillStyle = canvasTheme.ink;
-  ctx.font = font(scene, 10, 800);
+  ctx.font = font(scene, 9.8, 650);
   ctx.fillText("MINIMAP", x + 13 * scale, y + 22 * scale);
   const map = (point: Point) => ({
     x: x + 16 * scale + ((point.x - bounds.x) / bounds.w) * (w - 32 * scale),
     y: y + 38 * scale + ((point.y - bounds.y) / bounds.h) * (h - 54 * scale),
   });
-  ctx.strokeStyle = "#a5b0bc";
-  ctx.setLineDash([2 * scale, 2 * scale]);
+  ctx.strokeStyle = "#9faab6";
+  ctx.setLineDash([2.2 * scale, 2.2 * scale]);
   ctx.strokeRect(x + 14 * scale, y + 34 * scale, w - 28 * scale, h - 48 * scale);
   ctx.setLineDash([]);
   scene.edges.forEach((edge) => {
     ctx.strokeStyle = canvasTheme.edge[edge.tone];
-    ctx.lineWidth = 1.5 * scale;
+    ctx.globalAlpha = 0.5;
+    ctx.lineWidth = 1.15 * scale;
     const mapped = edge.points.map(map);
     drawRoundedRoute(ctx, mapped, 4 * scale);
+    ctx.stroke();
+  });
+  ctx.globalAlpha = 1;
+  scene.nodes.forEach((node) => {
+    const topLeft = map({ x: node.rect.x, y: node.rect.y });
+    const bottomRight = map({ x: node.rect.x + node.rect.w, y: node.rect.y + node.rect.h });
+    ctx.fillStyle = node.tone === "gas" ? "#fffaf2" : node.tone === "liquid" ? "#f8fdfe" : "#ffffff";
+    ctx.strokeStyle =
+      node.tone === "gas"
+        ? "#e8c580"
+        : node.tone === "liquid" || node.tone === "separator"
+          ? "#b7dde0"
+          : node.tone === "risk"
+            ? "#efbaba"
+            : "#cbd3dc";
+    ctx.lineWidth = 0.7 * scale;
+    roundedRect(
+      ctx,
+      topLeft.x,
+      topLeft.y,
+      Math.max(4 * scale, bottomRight.x - topLeft.x),
+      Math.max(3 * scale, bottomRight.y - topLeft.y),
+      2 * scale,
+    );
+    ctx.fill();
     ctx.stroke();
   });
   ctx.restore();
@@ -229,10 +257,10 @@ function drawMiniMap(ctx: CanvasRenderingContext2D, scene: CanvasScene) {
 
 function drawZoomControls(ctx: CanvasRenderingContext2D, scene: CanvasScene) {
   const scale = scene.scale;
-  const x = 236 * scale;
-  const y = scene.height - 110 * scale;
+  const x = 258 * scale;
+  const y = scene.height - 176 * scale;
   const w = 34 * scale;
-  const h = 98 * scale;
+  const h = 122 * scale;
   ctx.save();
   ctx.fillStyle = "rgba(255, 255, 255, 0.96)";
   ctx.strokeStyle = canvasTheme.line;
@@ -242,11 +270,11 @@ function drawZoomControls(ctx: CanvasRenderingContext2D, scene: CanvasScene) {
   ctx.fillStyle = canvasTheme.ink;
   ctx.font = font(scene, 18, 500);
   ctx.textAlign = "center";
-  ctx.fillText("+", x + w / 2, y + 26 * scale);
-  ctx.fillText("-", x + w / 2, y + 58 * scale);
+  ctx.fillText("+", x + w / 2, y + 28 * scale);
+  ctx.fillText("-", x + w / 2, y + 67 * scale);
   ctx.strokeStyle = canvasTheme.muted;
   ctx.lineWidth = 1.5 * scale;
-  const cy = y + 81 * scale;
+  const cy = y + 101 * scale;
   ctx.strokeRect(x + 10 * scale, cy - 7 * scale, 14 * scale, 14 * scale);
   ctx.restore();
 }
@@ -273,7 +301,7 @@ function drawIcon(
   ctx.save();
   ctx.strokeStyle = color;
   ctx.fillStyle = color;
-  ctx.lineWidth = Math.max(1.4, size * 0.08);
+  ctx.lineWidth = Math.max(1.2, size * 0.065);
   if (icon === "feed" || icon === "separator") {
     drawCylinder(ctx, x + size * 0.18, y, size * 0.46, size * 0.86, color);
   } else if (icon === "compressor") {
@@ -296,12 +324,18 @@ function drawIcon(
     ctx.stroke();
   } else if (icon === "valve") {
     ctx.beginPath();
-    ctx.moveTo(x + size * 0.15, y + size * 0.1);
-    ctx.lineTo(x + size * 0.5, y + size * 0.45);
-    ctx.lineTo(x + size * 0.85, y + size * 0.1);
-    ctx.moveTo(x + size * 0.15, y + size * 0.9);
-    ctx.lineTo(x + size * 0.5, y + size * 0.55);
-    ctx.lineTo(x + size * 0.85, y + size * 0.9);
+    ctx.moveTo(x + size * 0.13, y + size * 0.26);
+    ctx.lineTo(x + size * 0.5, y + size * 0.5);
+    ctx.lineTo(x + size * 0.13, y + size * 0.74);
+    ctx.closePath();
+    ctx.moveTo(x + size * 0.87, y + size * 0.26);
+    ctx.lineTo(x + size * 0.5, y + size * 0.5);
+    ctx.lineTo(x + size * 0.87, y + size * 0.74);
+    ctx.closePath();
+    ctx.moveTo(x + size * 0.5, y + size * 0.18);
+    ctx.lineTo(x + size * 0.5, y + size * 0.82);
+    ctx.moveTo(x + size * 0.35, y + size * 0.18);
+    ctx.lineTo(x + size * 0.65, y + size * 0.18);
     ctx.stroke();
   } else if (icon === "heater" || icon === "flame") {
     drawFlame(ctx, x, y, size, color);

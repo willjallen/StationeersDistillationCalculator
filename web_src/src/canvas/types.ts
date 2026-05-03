@@ -68,3 +68,9 @@ export type CanvasScene = {
   stages: Stage[];
   emptyMessage?: string;
 };
+
+export type CanvasView = {
+  zoom: number;
+  panX: number;
+  panY: number;
+};

@@ -61,3 +61,14 @@ def test_webview_plan_payload_is_strict_json_and_diagram_ready() -> None:
         if node["node_kind"] == "phase_splitter"
     ]
     assert "polishing_reached_target" in stage_nodes[0]["parameters"]
+    assert any(
+        node["node_kind"] == "condensation_valve"
+        for node in graph["nodes"]  # type: ignore[index]
+    )
+    residue_nodes = [
+        node
+        for node in graph["nodes"]  # type: ignore[index]
+        if node["node_kind"] == "residue"
+    ]
+    assert residue_nodes
+    assert "residue_total_moles" in residue_nodes[0]["parameters"]

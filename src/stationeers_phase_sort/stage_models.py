@@ -158,6 +158,10 @@ def stage_from_branch(
             - config.hazard_cost_weight * len(branch.hazard_warnings)
         )
 
+    operation_kind: Literal["condense", "evaporate", "equilibrate"] = (
+        "condense" if branch.product_branch == ProductBranch.LIQUID else "evaporate"
+    )
+
     return StageEvaluation(
         target_name=target_name,
         product_branch=branch.product_branch,
@@ -179,6 +183,7 @@ def stage_from_branch(
         hazard_warnings=branch.hazard_warnings,
         score=score,
         limiting_impurity_name=limiting_impurity_name,
+        operation_kind=operation_kind,
     )
 
 

@@ -77,14 +77,35 @@ export type PlanSummary = {
   remaining_targets: string[];
 };
 
+export type GraphParameter = string | number | boolean | null;
+
+export type ProcessGraphNode = {
+  node_id: string;
+  node_kind: string;
+  parameters: Record<string, GraphParameter>;
+};
+
+export type ProcessGraphEdge = {
+  source_node_id: string;
+  destination_node_id: string;
+  stream: Stream | null;
+};
+
+export type ProcessGraph = {
+  nodes: ProcessGraphNode[];
+  edges: ProcessGraphEdge[];
+};
+
 export type PlanPayload = {
   request: Record<string, unknown>;
   initial_stream: Stream;
   summary: PlanSummary;
   stages: Stage[];
+  graph: ProcessGraph;
 };
 
 export type PlanRequest = {
+  preset: string;
   substances: string[];
   composition: Record<string, number>;
   total_moles: number;
