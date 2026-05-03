@@ -23,7 +23,7 @@ Long summary, in paragraph form.
 
 First line of the commit message is always in lower case.
 
-Categories: Here are some non exhaustive examples. Try to first reuse an existing category in the commit history unless it doesn't make sense
+Categories: Here are some non exhaustive examples I have used in the past for other projects. Pick or invent categories that match the current project we are working on best. Try to first reuse an existing category in the commit history unless it doesn't make sense
 - ai
 - git
 - ux
