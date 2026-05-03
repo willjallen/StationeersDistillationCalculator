@@ -230,7 +230,7 @@ class SearchPlan:
 class ProcessNode:
     node_id: str
     node_kind: str
-    parameters: dict[str, float | str | bool] = field(default_factory=dict)
+    parameters: dict[str, float | int | str | bool | None] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
