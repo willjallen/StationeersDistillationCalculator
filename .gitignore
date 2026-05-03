@@ -4,7 +4,11 @@
 .ruff_cache/
 __pycache__/
 *.py[cod]
+node_modules/
 dist/
 build/
 *.egg-info/
 .tmp-smoke/
+playwright-report/
+test-results/
+webui-*.png

@@ -1,0 +1,22 @@
+{
+  "name": "stationeers-phase-sort-webview",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build:web": "vite build",
+    "check:web": "tsc --noEmit",
+    "screenshot": "playwright screenshot --viewport-size=1440,900 http://127.0.0.1:8765/ webview-screenshot.png"
+  },
+  "dependencies": {
+    "@vitejs/plugin-react": "^5.1.1",
+    "vite": "^7.2.7",
+    "typescript": "^5.9.3",
+    "react": "^19.2.1",
+    "react-dom": "^19.2.1",
+    "@types/react": "^19.2.7",
+    "@types/react-dom": "^19.2.3",
+    "playwright": "^1.57.0"
+  },
+  "devDependencies": {}
+}

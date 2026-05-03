@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from importlib.resources import files
+from pathlib import Path
 
 from stationeers_phase_sort.cli import build_parser
 from stationeers_phase_sort.webview import build_meta_payload, build_plan_payload
@@ -20,6 +21,14 @@ def test_webview_static_assets_are_packaged() -> None:
     assert static_files.joinpath("index.html").is_file()
     assert static_files.joinpath("app.css").is_file()
     assert static_files.joinpath("app.js").is_file()
+
+
+def test_webview_uses_canvas_and_fixed_viewport_layout() -> None:
+    assert Path("web_src/src/PlanCanvas.tsx").read_text(encoding="utf-8").count("<canvas") == 1
+    css = files("stationeers_phase_sort.web_static").joinpath("app.css").read_text()
+
+    assert "overflow:hidden" in css
+    assert "plan-canvas" in css
 
 
 def test_webview_meta_payload_lists_presets_and_substances() -> None:

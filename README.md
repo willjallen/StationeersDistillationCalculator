@@ -41,4 +41,10 @@ uv run stationeers-phase-sort webview
 
 Then open `http://127.0.0.1:8765/`.
 
+The webview source is in `web_src/`. Rebuild the packaged frontend assets with:
+
+```bash
+npm run build:web
+```
+
 Packaged presets are `all-gases`, `base-air`, and `mars-atmosphere`.
