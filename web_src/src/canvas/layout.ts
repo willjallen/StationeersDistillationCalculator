@@ -132,6 +132,22 @@ function sceneNodeForGraphNode(
     };
   }
 
+  if (graphNode.node_kind === "polishing_recycle") {
+    const passes = paramNumber(graphNode, "passes");
+    return {
+      id: graphNode.node_id,
+      rect: node.rect,
+      tone: "recycle",
+      icon: "recycle",
+      title: `${pad(displayIndexForNode(graphNode, node.stageIndex))} Polish`,
+      subtitle: passes ? `${numberText(passes, 0)} passes` : "Polishing",
+      lines: [`${percentText(paramNumber(graphNode, "final_purity"), 2)} purity`],
+      variant: "compact",
+      stageIndex: node.stageIndex,
+      selected: node.stageIndex === selectedStageIndex,
+    };
+  }
+
   if (graphNode.node_kind === "recycle" || graphNode.node_kind === "residue") {
     const isFinalResidue = graphNode.node_kind === "residue";
     return {
@@ -327,6 +343,8 @@ function edgeTone(
   if (
     destination.node_kind === "recycle" ||
     source.node_kind === "recycle" ||
+    destination.node_kind === "polishing_recycle" ||
+    source.node_kind === "polishing_recycle" ||
     destination.node_kind === "residue" ||
     source.node_kind === "residue" ||
     source.node_kind === "phase_splitter"

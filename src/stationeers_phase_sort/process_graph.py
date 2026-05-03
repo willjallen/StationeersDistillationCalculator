@@ -8,6 +8,7 @@ from stationeers_phase_sort.models import (
     SearchPlan,
     StageEvaluation,
 )
+from stationeers_phase_sort.optimizer.polishing import polishing_streams_after_repeated_passes
 
 SETPOINT_TEMPERATURE_EPSILON_KELVIN = 0.25
 SETPOINT_PRESSURE_EPSILON_KPA = 0.25
@@ -66,6 +67,19 @@ def _equipment_kind_for_stage(stage: StageEvaluation) -> str | None:
     )
 
 
+def _polishing_passes_for_graph(record_passes: int | None) -> int:
+    return max(1, record_passes or 1)
+
+
+def _empty_like(stream: MaterialStream) -> MaterialStream:
+    return MaterialStream(
+        {},
+        temperature_kelvin=stream.temperature_kelvin,
+        pressure_kpa=stream.pressure_kpa,
+        phase_hint="empty",
+    )
+
+
 def plan_to_process_graph(plan: SearchPlan) -> ProcessGraph:
     nodes: list[ProcessNode] = [
         ProcessNode("source", "source"),
@@ -78,9 +92,24 @@ def plan_to_process_graph(plan: SearchPlan) -> ProcessGraph:
         stage = record.stage
         stage_node_id = f"stage_{record.stage_index:02d}"
         product_node_id = f"product_{stage.target_name.lower().replace(' ', '_')}"
+        polishing_node_id = f"polishing_recycle_{record.stage_index:02d}"
+        polishing_residue_node_id = f"polishing_residue_{record.stage_index:02d}"
         residue_node_id = f"residue_{record.stage_index:02d}"
         solid_risk_node_id = f"solid_risk_{record.stage_index:02d}"
         solid_risk_stream = _solid_risk_stream_for_stage(stage)
+        polishing_passes = _polishing_passes_for_graph(record.polishing_passes_needed)
+        has_polishing_loop = polishing_passes > 1
+        if has_polishing_loop:
+            polished_stream, polishing_residue_stream = polishing_streams_after_repeated_passes(
+                stage.product_stream,
+                stage,
+                polishing_passes,
+            )
+            product_purity = record.polishing_final_purity
+        else:
+            polished_stream = stage.product_stream
+            polishing_residue_stream = _empty_like(stage.product_stream)
+            product_purity = stage.product_purity
 
         equipment_kind = _equipment_kind_for_stage(stage)
         stage_input_node_id = previous_residue_node
@@ -135,6 +164,32 @@ def plan_to_process_graph(plan: SearchPlan) -> ProcessGraph:
             )
         )
         unit_index += 1
+        edges.append(ProcessEdge(stage_input_node_id, stage_node_id, stage.feed_stream))
+
+        product_source_node_id = stage_node_id
+        if has_polishing_loop:
+            nodes.append(
+                ProcessNode(
+                    polishing_node_id,
+                    "polishing_recycle",
+                    {
+                        "unit_index": unit_index,
+                        "stage_index": record.stage_index,
+                        "target_substance": stage.target_name,
+                        "selected_branch": stage.product_branch.value,
+                        "passes": polishing_passes,
+                        "input_total_moles": stage.product_stream.total_moles,
+                        "output_total_moles": polished_stream.total_moles,
+                        "residue_total_moles": polishing_residue_stream.total_moles,
+                        "final_purity": record.polishing_final_purity,
+                        "final_yield": record.polishing_final_yield_fraction,
+                    },
+                )
+            )
+            unit_index += 1
+            edges.append(ProcessEdge(stage_node_id, polishing_node_id, stage.product_stream))
+            product_source_node_id = polishing_node_id
+
         nodes.append(
             ProcessNode(
                 product_node_id,
@@ -143,13 +198,37 @@ def plan_to_process_graph(plan: SearchPlan) -> ProcessGraph:
                     "stage_index": record.stage_index,
                     "substance": stage.target_name,
                     "selected_branch": stage.product_branch.value,
-                    "product_total_moles": stage.product_total_moles,
-                    "product_purity": stage.product_purity,
+                    "product_total_moles": polished_stream.total_moles,
+                    "product_purity": product_purity,
                 },
             )
         )
-        edges.append(ProcessEdge(stage_input_node_id, stage_node_id, stage.feed_stream))
-        edges.append(ProcessEdge(stage_node_id, product_node_id, stage.product_stream))
+        edges.append(ProcessEdge(product_source_node_id, product_node_id, polished_stream))
+
+        if polishing_residue_stream.total_moles > 0.0:
+            nodes.append(
+                ProcessNode(
+                    polishing_residue_node_id,
+                    "residue",
+                    {
+                        "unit_index": unit_index,
+                        "stage_index": record.stage_index,
+                        "source": "polishing",
+                        "target_substance": stage.target_name,
+                        "residue_total_moles": polishing_residue_stream.total_moles,
+                        "temperature_kelvin": polishing_residue_stream.temperature_kelvin,
+                        "pressure_kpa": polishing_residue_stream.pressure_kpa,
+                    },
+                )
+            )
+            unit_index += 1
+            edges.append(
+                ProcessEdge(
+                    polishing_node_id,
+                    polishing_residue_node_id,
+                    polishing_residue_stream,
+                )
+            )
 
         if solid_risk_stream is not None and solid_risk_stream.total_moles > 0.0:
             nodes.append(

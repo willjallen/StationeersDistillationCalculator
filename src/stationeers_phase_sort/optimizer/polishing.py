@@ -15,12 +15,8 @@ def purity_after_repeated_passes(
     target_name: str,
     passes: int,
 ) -> tuple[float, float]:
-    retained_moles_by_name = {}
+    retained_moles_by_name = retained_moles_after_repeated_passes(product_stream, stage, passes)
     target_initial_moles = product_stream.moles_by_substance_name.get(target_name, 0.0)
-    for name, amount in product_stream.moles_by_substance_name.items():
-        retention_probability = product_retention_probability_for_name(stage, name)
-        retained_moles_by_name[name] = amount * (retention_probability**passes)
-
     total_retained_moles = sum(retained_moles_by_name.values())
     target_retained_moles = retained_moles_by_name.get(target_name, 0.0)
     purity = target_retained_moles / total_retained_moles if total_retained_moles > 0.0 else 0.0
@@ -28,6 +24,49 @@ def purity_after_repeated_passes(
         target_retained_moles / target_initial_moles if target_initial_moles > 0.0 else 0.0
     )
     return purity, target_yield
+
+
+def retained_moles_after_repeated_passes(
+    product_stream: MaterialStream,
+    stage: StageEvaluation,
+    passes: int,
+) -> dict[str, float]:
+    pass_count = max(1, passes)
+    retained_moles_by_name = {}
+    for name, amount in product_stream.moles_by_substance_name.items():
+        retention_probability = product_retention_probability_for_name(stage, name)
+        retained_moles_by_name[name] = amount * (retention_probability**pass_count)
+    return retained_moles_by_name
+
+
+def polishing_streams_after_repeated_passes(
+    product_stream: MaterialStream,
+    stage: StageEvaluation,
+    passes: int,
+) -> tuple[MaterialStream, MaterialStream]:
+    retained_moles_by_name = retained_moles_after_repeated_passes(
+        product_stream,
+        stage,
+        passes,
+    )
+    rejected_moles_by_name = {
+        name: max(0.0, amount - retained_moles_by_name.get(name, 0.0))
+        for name, amount in product_stream.moles_by_substance_name.items()
+    }
+    polished_stream = MaterialStream(
+        retained_moles_by_name,
+        temperature_kelvin=product_stream.temperature_kelvin,
+        pressure_kpa=product_stream.pressure_kpa,
+        volume_liters=product_stream.volume_liters,
+        phase_hint=product_stream.phase_hint,
+    ).without_tiny_entries()
+    rejected_stream = MaterialStream(
+        rejected_moles_by_name,
+        temperature_kelvin=product_stream.temperature_kelvin,
+        pressure_kpa=product_stream.pressure_kpa,
+        phase_hint=product_stream.phase_hint,
+    ).without_tiny_entries()
+    return polished_stream, rejected_stream
 
 
 def required_polishing_passes(
