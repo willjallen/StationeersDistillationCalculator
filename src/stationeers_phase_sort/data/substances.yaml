@@ -1,26 +1,29 @@
+# Phase-change constants are sourced from the Stationeers Community Wiki
+# phase-change tables, checked 2026-05-03. Values are game constants first,
+# not real-world thermodynamic constants.
 - name: Alcohol
   formula: ALC
   phase_change_enabled: true
   molar_heat_capacity_j_per_mol_kelvin: 33.0
   molar_heat_of_fusion_kj_per_mol: 2.0
-  melting_temperature_kelvin: 232.0
+  melting_temperature_kelvin: 231.630843984
   boiling_temperature_kelvin_at_100_kpa: 322.0
   minimum_condensation_pressure_kpa: 6.3
-  maximum_liquid_temperature_kelvin: 424.0
+  maximum_liquid_temperature_kelvin: 423.675171692
   maximum_liquid_pressure_kpa: 1000.0
   molar_latent_heat_kj_per_mol: 2.0
-  liquid_molar_volume_l_per_mol: null
-  molar_mass_g_per_mol: null
+  liquid_molar_volume_l_per_mol: 0.058
+  molar_mass_g_per_mol: 46.0
   hazard_tags: [fuel]
 - name: Carbon Dioxide
   formula: CO2
   phase_change_enabled: true
   molar_heat_capacity_j_per_mol_kelvin: 28.2
   molar_heat_of_fusion_kj_per_mol: 0.6
-  melting_temperature_kelvin: 218.0
+  melting_temperature_kelvin: 217.82
   boiling_temperature_kelvin_at_100_kpa: null
   minimum_condensation_pressure_kpa: 517.0
-  maximum_liquid_temperature_kelvin: 266.0
+  maximum_liquid_temperature_kelvin: 265.0
   maximum_liquid_pressure_kpa: 6000.0
   molar_latent_heat_kj_per_mol: 0.6
   liquid_molar_volume_l_per_mol: 0.04
@@ -45,14 +48,14 @@
   phase_change_enabled: true
   molar_heat_capacity_j_per_mol_kelvin: 48.4
   molar_heat_of_fusion_kj_per_mol: 4.0
-  melting_temperature_kelvin: 246.0
+  melting_temperature_kelvin: 246.236749353
   boiling_temperature_kelvin_at_100_kpa: 334.0
   minimum_condensation_pressure_kpa: 6.3
-  maximum_liquid_temperature_kelvin: 521.0
+  maximum_liquid_temperature_kelvin: 520.807708414
   maximum_liquid_pressure_kpa: 6000.0
   molar_latent_heat_kj_per_mol: 4.0
-  liquid_molar_volume_l_per_mol: null
-  molar_mass_g_per_mol: null
+  liquid_molar_volume_l_per_mol: 0.03
+  molar_mass_g_per_mol: 32.0
   hazard_tags: [fuel, toxic]
 - name: Hydrochloric Acid
   formula: HCl
@@ -65,22 +68,22 @@
   maximum_liquid_temperature_kelvin: 431.0
   maximum_liquid_pressure_kpa: 1000.0
   molar_latent_heat_kj_per_mol: 1.0
-  liquid_molar_volume_l_per_mol: null
-  molar_mass_g_per_mol: null
+  liquid_molar_volume_l_per_mol: 0.028
+  molar_mass_g_per_mol: 36.0
   hazard_tags: [corrosive, toxic]
 - name: Hydrogen
   formula: H2
   phase_change_enabled: true
   molar_heat_capacity_j_per_mol_kelvin: 20.4
   molar_heat_of_fusion_kj_per_mol: 0.2
-  melting_temperature_kelvin: 15.2
+  melting_temperature_kelvin: 15.1767057463
   boiling_temperature_kelvin_at_100_kpa: 28.2
   minimum_condensation_pressure_kpa: 6.3
-  maximum_liquid_temperature_kelvin: 70.1
+  maximum_liquid_temperature_kelvin: 70.0551551908
   maximum_liquid_pressure_kpa: 6000.0
   molar_latent_heat_kj_per_mol: 0.2
-  liquid_molar_volume_l_per_mol: null
-  molar_mass_g_per_mol: null
+  liquid_molar_volume_l_per_mol: 0.028
+  molar_mass_g_per_mol: 2.0
   hazard_tags: [fuel]
 - name: Methane
   formula: CH4
@@ -115,10 +118,10 @@
   phase_change_enabled: true
   molar_heat_capacity_j_per_mol_kelvin: 37.2
   molar_heat_of_fusion_kj_per_mol: 4.0
-  melting_temperature_kelvin: 251.0
+  melting_temperature_kelvin: 252.1
   boiling_temperature_kelvin_at_100_kpa: null
   minimum_condensation_pressure_kpa: 800.0
-  maximum_liquid_temperature_kelvin: 431.0
+  maximum_liquid_temperature_kelvin: 430.6
   maximum_liquid_pressure_kpa: 2000.0
   molar_latent_heat_kj_per_mol: 4.0
   liquid_molar_volume_l_per_mol: 0.026
@@ -129,24 +132,24 @@
   phase_change_enabled: true
   molar_heat_capacity_j_per_mol_kelvin: 38.6
   molar_heat_of_fusion_kj_per_mol: 1.0
-  melting_temperature_kelvin: 81.4
+  melting_temperature_kelvin: 81.4067268868
   boiling_temperature_kelvin_at_100_kpa: null
   minimum_condensation_pressure_kpa: 250.0
-  maximum_liquid_temperature_kelvin: 304.0
+  maximum_liquid_temperature_kelvin: 304.387897614
   maximum_liquid_pressure_kpa: 6000.0
   molar_latent_heat_kj_per_mol: 1.0
-  liquid_molar_volume_l_per_mol: null
-  molar_mass_g_per_mol: null
+  liquid_molar_volume_l_per_mol: 0.026
+  molar_mass_g_per_mol: 24.0
   hazard_tags: [oxidizer]
 - name: Oxygen
   formula: O2
   phase_change_enabled: true
   molar_heat_capacity_j_per_mol_kelvin: 21.1
   molar_heat_of_fusion_kj_per_mol: 0.8
-  melting_temperature_kelvin: 56.4
+  melting_temperature_kelvin: 56.416
   boiling_temperature_kelvin_at_100_kpa: 86.5
   minimum_condensation_pressure_kpa: 6.3
-  maximum_liquid_temperature_kelvin: 162.0
+  maximum_liquid_temperature_kelvin: 162.2
   maximum_liquid_pressure_kpa: 6000.0
   molar_latent_heat_kj_per_mol: 0.8
   liquid_molar_volume_l_per_mol: 0.03
@@ -155,26 +158,26 @@
 - name: Polluted Water
   formula: PH2O
   phase_change_enabled: true
-  molar_heat_capacity_j_per_mol_kelvin: 64.0
+  molar_heat_capacity_j_per_mol_kelvin: 72.0
   molar_heat_of_fusion_kj_per_mol: 8.0
-  melting_temperature_kelvin: 276.0
+  melting_temperature_kelvin: 276.15
   boiling_temperature_kelvin_at_100_kpa: 387.0
   minimum_condensation_pressure_kpa: 6.3
-  maximum_liquid_temperature_kelvin: 634.0
+  maximum_liquid_temperature_kelvin: 629.0
   maximum_liquid_pressure_kpa: 6000.0
   molar_latent_heat_kj_per_mol: 8.0
-  liquid_molar_volume_l_per_mol: null
-  molar_mass_g_per_mol: null
+  liquid_molar_volume_l_per_mol: 0.018
+  molar_mass_g_per_mol: 108.0
   hazard_tags: [toxic]
 - name: Pollutant
   formula: X
   phase_change_enabled: true
   molar_heat_capacity_j_per_mol_kelvin: 24.8
   molar_heat_of_fusion_kj_per_mol: 2.0
-  melting_temperature_kelvin: 173.0
+  melting_temperature_kelvin: 173.32
   boiling_temperature_kelvin_at_100_kpa: null
   minimum_condensation_pressure_kpa: 1800.0
-  maximum_liquid_temperature_kelvin: 434.0
+  maximum_liquid_temperature_kelvin: 425.0
   maximum_liquid_pressure_kpa: 6000.0
   molar_latent_heat_kj_per_mol: 2.0
   liquid_molar_volume_l_per_mol: 0.04
@@ -198,25 +201,25 @@
   formula: NaCl
   phase_change_enabled: true
   molar_heat_capacity_j_per_mol_kelvin: 130.0
-  molar_heat_of_fusion_kj_per_mol: 16.0
-  melting_temperature_kelvin: 606.0
+  molar_heat_of_fusion_kj_per_mol: 1.0
+  melting_temperature_kelvin: 605.903458297
   boiling_temperature_kelvin_at_100_kpa: 1591.0
   minimum_condensation_pressure_kpa: 6.3
-  maximum_liquid_temperature_kelvin: 2799.0
+  maximum_liquid_temperature_kelvin: 2799.31057833
   maximum_liquid_pressure_kpa: 515.0
-  molar_latent_heat_kj_per_mol: 16.0
+  molar_latent_heat_kj_per_mol: 1.0
   liquid_molar_volume_l_per_mol: 0.04
-  molar_mass_g_per_mol: null
+  molar_mass_g_per_mol: 101.0
   hazard_tags: [corrosive]
 - name: Water
   formula: H2O
   phase_change_enabled: true
   molar_heat_capacity_j_per_mol_kelvin: 72.0
   molar_heat_of_fusion_kj_per_mol: 8.0
-  melting_temperature_kelvin: 273.0
+  melting_temperature_kelvin: 273.15
   boiling_temperature_kelvin_at_100_kpa: 384.0
   minimum_condensation_pressure_kpa: 6.3
-  maximum_liquid_temperature_kelvin: 644.0
+  maximum_liquid_temperature_kelvin: 643.0
   maximum_liquid_pressure_kpa: 6000.0
   molar_latent_heat_kj_per_mol: 8.0
   liquid_molar_volume_l_per_mol: 0.018
