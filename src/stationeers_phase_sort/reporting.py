@@ -11,6 +11,7 @@ from stationeers_phase_sort.models import (
     MaterialStream,
     PlannerConfig,
     ProcessGraph,
+    ProductRecord,
     SearchPlan,
     StageEvaluation,
 )
@@ -47,6 +48,67 @@ def print_initial_stream(
     print(f"    initial P: {stream.pressure_kpa or 100.0:.3f} kPa", file=file)
     print(f"    total: {stream.total_moles:.6g} mol", file=file)
     print_stream_composition(stream, file=file)
+
+
+def _plan_initial_stream(plan: SearchPlan) -> MaterialStream:
+    if plan.product_records:
+        return plan.product_records[0].stage.feed_stream
+    return plan.residue_stream
+
+
+def _plan_product_total_moles(plan: SearchPlan) -> float:
+    return sum(record.stage.product_total_moles for record in plan.product_records)
+
+
+def _stage_solid_risk_moles_by_name(stage: StageEvaluation) -> dict[str, float]:
+    solid_moles_by_name: dict[str, float] = {}
+    for name, feed_moles in stage.feed_stream.moles_by_substance_name.items():
+        probability = stage.phase_probabilities_by_name.get(name)
+        if probability is None or probability.solid_probability <= 0.0:
+            continue
+        solid_moles = max(0.0, feed_moles) * probability.solid_probability
+        if solid_moles > 0.0:
+            solid_moles_by_name[name] = solid_moles
+    return solid_moles_by_name
+
+
+def _plan_solid_risk_moles_by_name(plan: SearchPlan) -> dict[str, float]:
+    solid_moles_by_name: dict[str, float] = {}
+    for record in plan.product_records:
+        for name, solid_moles in _stage_solid_risk_moles_by_name(record.stage).items():
+            solid_moles_by_name[name] = solid_moles_by_name.get(name, 0.0) + solid_moles
+    return solid_moles_by_name
+
+
+def _target_product_recovery_from_initial(
+    record: ProductRecord,
+    initial_stream: MaterialStream,
+) -> float:
+    initial_target_moles = initial_stream.moles_by_substance_name.get(
+        record.stage.target_name,
+        0.0,
+    )
+    if initial_target_moles <= 0.0:
+        return 0.0
+    target_moles_in_product = record.stage.product_stream.moles_by_substance_name.get(
+        record.stage.target_name,
+        0.0,
+    )
+    return target_moles_in_product / initial_target_moles
+
+
+def _records_missing_polishing_target(plan: SearchPlan) -> list[ProductRecord]:
+    return [
+        record for record in plan.product_records if record.polishing_passes_needed is None
+    ]
+
+
+def _format_moles_by_name(moles_by_name: dict[str, float]) -> str:
+    return ", ".join(
+        f"{name}={moles:.6g} mol"
+        for name, moles in sorted(moles_by_name.items())
+        if moles > 0.0
+    )
 
 
 def print_stage(
@@ -129,6 +191,13 @@ def print_plan(
     show_probabilities: bool = False,
     file: TextIO | None = None,
 ) -> None:
+    initial_stream = _plan_initial_stream(plan)
+    initial_total_moles = initial_stream.total_moles
+    product_total_moles = _plan_product_total_moles(plan)
+    solid_risk_by_name = _plan_solid_risk_moles_by_name(plan)
+    solid_risk_total_moles = sum(solid_risk_by_name.values())
+    missing_polishing_records = _records_missing_polishing_target(plan)
+
     print(file=file)
     print("=== BEST PLAN FOUND ===", file=file)
     print(f"products: {len(plan.product_records)}", file=file)
@@ -136,6 +205,26 @@ def print_plan(
     print(f"cumulative score: {plan.cumulative_score:.4f}", file=file)
     print(f"approx cumulative heat moved/released: {plan.cumulative_energy_kj:.3f} kJ", file=file)
     print(f"cumulative setpoint cost: {plan.cumulative_setpoint_cost:.4f}", file=file)
+    if initial_total_moles > 0.0:
+        print(
+            f"product moles: {product_total_moles:.6g} mol; "
+            f"solid-risk diversion: {solid_risk_total_moles:.6g} mol "
+            f"({solid_risk_total_moles / initial_total_moles * 100.0:.6f}% of feed)",
+            file=file,
+        )
+    if solid_risk_by_name:
+        print(f"solid-risk by substance: {_format_moles_by_name(solid_risk_by_name)}", file=file)
+    if missing_polishing_records:
+        missing_text = ", ".join(
+            f"{record.stage.target_name} ({record.polishing_final_purity * 100.0:.6f}%)"
+            for record in missing_polishing_records
+        )
+        print(f"products below polishing target: {missing_text}", file=file)
+    if plan.remaining_target_names:
+        print(
+            "unresolved targets: " + ", ".join(plan.remaining_target_names),
+            file=file,
+        )
     print(file=file)
 
     previous_temperature: float | None = None
@@ -274,6 +363,8 @@ def write_stages_csv(plan: SearchPlan, path: str | Path) -> None:
 
 
 def write_products_csv(plan: SearchPlan, path: str | Path) -> None:
+    initial_stream = _plan_initial_stream(plan)
+
     with Path(path).open("w", newline="", encoding="utf-8") as file:
         writer = csv.writer(file)
         writer.writerow(
@@ -283,6 +374,9 @@ def write_products_csv(plan: SearchPlan, path: str | Path) -> None:
                 "selected_branch",
                 "raw_product_purity",
                 "raw_product_recovery",
+                "initial_target_moles",
+                "target_moles_in_product",
+                "target_product_recovery_from_initial",
                 "recommended_polishing_passes",
                 "expected_final_purity",
                 "expected_final_recovery",
@@ -292,6 +386,14 @@ def write_products_csv(plan: SearchPlan, path: str | Path) -> None:
         )
         for record in plan.product_records:
             stage = record.stage
+            initial_target_moles = initial_stream.moles_by_substance_name.get(
+                stage.target_name,
+                0.0,
+            )
+            target_moles_in_product = stage.product_stream.moles_by_substance_name.get(
+                stage.target_name,
+                0.0,
+            )
             contaminants = [
                 f"{name}:{fraction:.6g}"
                 for name, _, fraction in sorted_composition_items(stage.product_stream)
@@ -304,6 +406,9 @@ def write_products_csv(plan: SearchPlan, path: str | Path) -> None:
                     stage.product_branch.value,
                     stage.product_purity,
                     stage.target_recovery,
+                    initial_target_moles,
+                    target_moles_in_product,
+                    _target_product_recovery_from_initial(record, initial_stream),
                     record.polishing_passes_needed
                     if record.polishing_passes_needed is not None
                     else "",
@@ -316,12 +421,36 @@ def write_products_csv(plan: SearchPlan, path: str | Path) -> None:
 
 
 def write_report_markdown(plan: SearchPlan, path: str | Path) -> None:
+    initial_stream = _plan_initial_stream(plan)
+    initial_total_moles = initial_stream.total_moles
+    product_total_moles = _plan_product_total_moles(plan)
+    solid_risk_by_name = _plan_solid_risk_moles_by_name(plan)
+    solid_risk_total_moles = sum(solid_risk_by_name.values())
+    missing_polishing_records = _records_missing_polishing_target(plan)
+
     with Path(path).open("w", encoding="utf-8") as file:
         file.write("# Stationeers Phase Sort Plan\n\n")
         file.write(f"- Products: {len(plan.product_records)}\n")
         file.write(f"- Worst one-pass purity: {plan.worst_product_purity * 100.0:.6f}%\n")
         file.write(f"- Cumulative score: {plan.cumulative_score:.4f}\n")
-        file.write(f"- Approx heat moved/released: {plan.cumulative_energy_kj:.3f} kJ\n\n")
+        file.write(f"- Approx heat moved/released: {plan.cumulative_energy_kj:.3f} kJ\n")
+        if initial_total_moles > 0.0:
+            file.write(
+                f"- Product moles: {product_total_moles:.6g} mol\n"
+                f"- Solid-risk diversion: {solid_risk_total_moles:.6g} mol "
+                f"({solid_risk_total_moles / initial_total_moles * 100.0:.6f}% of feed)\n"
+            )
+        if solid_risk_by_name:
+            file.write(f"- Solid-risk by substance: {_format_moles_by_name(solid_risk_by_name)}\n")
+        if missing_polishing_records:
+            missing_text = ", ".join(
+                f"{record.stage.target_name} ({record.polishing_final_purity * 100.0:.6f}%)"
+                for record in missing_polishing_records
+            )
+            file.write(f"- Products below polishing target: {missing_text}\n")
+        if plan.remaining_target_names:
+            file.write(f"- Unresolved targets: {', '.join(plan.remaining_target_names)}\n")
+        file.write("\n")
 
         for record in plan.product_records:
             stage = record.stage
@@ -333,7 +462,18 @@ def write_report_markdown(plan: SearchPlan, path: str | Path) -> None:
             file.write(f"- Pressure: {stage.pressure_kpa:.3f} kPa\n")
             file.write(f"- Purity: {stage.product_purity * 100.0:.6f}%\n")
             file.write(f"- Recovery: {stage.target_recovery * 100.0:.6f}%\n")
+            file.write(
+                "- Recovery from initial feed: "
+                f"{_target_product_recovery_from_initial(record, initial_stream) * 100.0:.6f}%\n"
+            )
             file.write(f"- Polishing passes: {record.polishing_passes_needed or 'not reached'}\n")
+            file.write(f"- Polishing final purity: {record.polishing_final_purity * 100.0:.6f}%\n")
+            file.write(
+                f"- Polishing target yield: "
+                f"{record.polishing_final_yield_fraction * 100.0:.6f}%\n"
+            )
+            if stage.solid_risk_total_moles > 0.0:
+                file.write(f"- Solid-risk diversion: {stage.solid_risk_total_moles:.6g} mol\n")
             if stage.limiting_impurity_name:
                 file.write(f"- Limiting impurity: {stage.limiting_impurity_name}\n")
             if stage.hazard_warnings:
@@ -342,6 +482,9 @@ def write_report_markdown(plan: SearchPlan, path: str | Path) -> None:
                     + "; ".join(warning.name for warning in stage.hazard_warnings)
                     + "\n"
                 )
+            file.write("- Product composition:\n")
+            for name, moles, fraction in sorted_composition_items(stage.product_stream)[:8]:
+                file.write(f"  - {name}: {moles:.6g} mol ({fraction * 100.0:.6f}%)\n")
             file.write("\n")
 
 

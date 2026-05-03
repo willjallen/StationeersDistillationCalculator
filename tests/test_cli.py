@@ -11,7 +11,7 @@ def test_validate_data_command(capsys) -> None:  # type: ignore[no-untyped-def]
     assert "Data validation passed." in capsys.readouterr().out
 
 
-def test_plan_command_writes_outputs(tmp_path: Path) -> None:
+def test_plan_command_writes_outputs(tmp_path: Path, capsys) -> None:  # type: ignore[no-untyped-def]
     report_path = tmp_path / "report.md"
     stages_path = tmp_path / "stages.csv"
     products_path = tmp_path / "products.csv"
@@ -46,8 +46,13 @@ def test_plan_command_writes_outputs(tmp_path: Path) -> None:
     )
 
     assert report_path.exists()
+    output = capsys.readouterr().out
+    assert "solid-risk diversion:" in output
+    assert "product moles:" in output
     assert stages_path.read_text(encoding="utf-8").startswith("stage_index,operation_kind")
-    assert products_path.exists()
+    products_header = products_path.read_text(encoding="utf-8").splitlines()[0]
+    assert "target_product_recovery_from_initial" in products_header
+    assert "Solid-risk diversion" in report_path.read_text(encoding="utf-8")
     graph = json.loads(graph_path.read_text(encoding="utf-8"))
     assert graph["nodes"]
     assert graph["edges"]
