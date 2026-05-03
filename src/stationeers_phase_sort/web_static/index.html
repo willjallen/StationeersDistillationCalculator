@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Stationeers Phase Sort</title>
+    <link rel="stylesheet" href="/app.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div>
+          <h1>Stationeers Phase Sort</h1>
+          <div id="runStatus" class="status-line">Loading data</div>
+        </div>
+        <button id="runButton" class="run-button" type="button">Run plan</button>
+      </header>
+
+      <aside class="control-panel" aria-label="Planner controls">
+        <section class="panel-section">
+          <h2>Feed</h2>
+          <label class="field">
+            <span>Preset</span>
+            <select id="presetSelect"></select>
+          </label>
+          <div id="substanceList" class="substance-list"></div>
+        </section>
+
+        <section class="panel-section">
+          <h2>Composition</h2>
+          <div id="compositionRows" class="composition-rows"></div>
+        </section>
+
+        <section class="panel-section">
+          <h2>Setpoints</h2>
+          <div class="two-column">
+            <label class="field">
+              <span>Total mol</span>
+              <input id="totalMoles" type="number" min="1" step="1" value="100" />
+            </label>
+            <label class="field">
+              <span>Max kPa</span>
+              <input id="maximumPressure" type="number" min="10" step="10" value="6000" />
+            </label>
+            <label class="field">
+              <span>Feed K</span>
+              <input id="initialTemperature" type="number" min="1" step="0.1" value="293.15" />
+            </label>
+            <label class="field">
+              <span>Feed kPa</span>
+              <input id="initialPressure" type="number" min="0.001" step="1" value="100" />
+            </label>
+          </div>
+          <fieldset class="segmented" id="pressureModelGroup">
+            <legend>Pressure model</legend>
+            <label><input type="radio" name="pressureModel" value="total" checked /> Total</label>
+            <label><input type="radio" name="pressureModel" value="partial" /> Partial</label>
+          </fieldset>
+        </section>
+
+        <section class="panel-section">
+          <h2>Search</h2>
+          <fieldset class="segmented" id="searchModeGroup">
+            <legend>Mode</legend>
+            <label><input type="radio" name="searchMode" value="greedy" checked /> Greedy</label>
+            <label><input type="radio" name="searchMode" value="beam" /> Beam</label>
+          </fieldset>
+          <div class="two-column">
+            <label class="field">
+              <span>Target %</span>
+              <input id="targetPurity" type="number" min="1" max="99.9999" step="0.0001" value="99.99" />
+            </label>
+            <label class="field">
+              <span>Passes</span>
+              <input id="maxPasses" type="number" min="1" max="400" step="1" value="80" />
+            </label>
+            <label class="field">
+              <span>T grid</span>
+              <input id="temperatureGrid" type="number" min="2" max="96" step="1" value="16" />
+            </label>
+            <label class="field">
+              <span>P grid</span>
+              <input id="pressureGrid" type="number" min="2" max="96" step="1" value="16" />
+            </label>
+            <label class="field">
+              <span>Temp error K</span>
+              <input id="temperatureError" type="number" min="0" max="50" step="0.05" value="0.5" />
+            </label>
+            <label class="field">
+              <span>Press error %</span>
+              <input id="pressureError" type="number" min="0" max="100" step="0.1" value="1" />
+            </label>
+          </div>
+        </section>
+      </aside>
+
+      <main class="workspace">
+        <section id="summaryStrip" class="summary-strip" aria-label="Plan summary"></section>
+        <section class="diagram-surface" aria-label="Process diagram">
+          <div class="surface-header">
+            <h2>Refining Tree</h2>
+            <div id="diagramLegend" class="legend"></div>
+          </div>
+          <div id="treeDiagram" class="tree-diagram"></div>
+        </section>
+        <section class="result-grid">
+          <div class="result-panel">
+            <h2>Stages</h2>
+            <div id="stageCards" class="stage-cards"></div>
+          </div>
+          <div class="result-panel">
+            <h2>Products</h2>
+            <div id="productTable" class="product-table"></div>
+          </div>
+        </section>
+      </main>
+    </div>
+    <script src="/app.js"></script>
+  </body>
+</html>

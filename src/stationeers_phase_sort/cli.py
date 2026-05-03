@@ -106,6 +106,16 @@ def build_parser() -> argparse.ArgumentParser:
     inspect_parser.add_argument("--temperature-kelvin", type=float, default=None)
     inspect_parser.set_defaults(handler=run_inspect_substance)
 
+    webview_parser = subparsers.add_parser(
+        "webview",
+        help="Run the local interactive web wrapper.",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    )
+    webview_parser.add_argument("--host", default="127.0.0.1")
+    webview_parser.add_argument("--port", type=int, default=8765)
+    webview_parser.add_argument("--open", action="store_true", help="Open a browser tab.")
+    webview_parser.set_defaults(handler=run_webview)
+
     return parser
 
 
@@ -215,6 +225,13 @@ def run_inspect_substance(arguments: argparse.Namespace) -> int:
             f"status={result.status.value}, vapor_pressure={vapor_pressure}"
         )
 
+    return 0
+
+
+def run_webview(arguments: argparse.Namespace) -> int:
+    from stationeers_phase_sort.webview import serve_webview
+
+    serve_webview(arguments.host, arguments.port, open_browser=arguments.open)
     return 0
 
 

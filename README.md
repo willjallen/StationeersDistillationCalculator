@@ -33,4 +33,12 @@ Inspect a substance curve:
 uv run stationeers-phase-sort inspect-substance Oxygen
 ```
 
+Run the local webview:
+
+```bash
+uv run stationeers-phase-sort webview
+```
+
+Then open `http://127.0.0.1:8765/`.
+
 Packaged presets are `all-gases`, `base-air`, and `mars-atmosphere`.
