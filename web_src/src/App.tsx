@@ -259,13 +259,14 @@ function App() {
           `base rendered node count diverged from backend graph: scene=${baseCanvas.dataset.sceneNodeCount}, graph=${baseCanvas.dataset.graphNodeCount}`,
         );
       }
+      if (baseCanvas.dataset.layoutViolations) {
+        throw new Error(`base layout violated grid constraints: ${baseCanvas.dataset.layoutViolations}`);
+      }
       const baseRect = baseCanvas.getBoundingClientRect();
-      const baseScale = Math.min(baseRect.width / 1080, baseRect.height / 730);
-      const baseOffsetX = (baseRect.width - 1080 * baseScale) / 2;
-      const baseOffsetY = (baseRect.height - 730 * baseScale) / 2;
       const baseBeforeClickSignature = baseCanvas.dataset.sceneSignature ?? "";
-      dispatchPointer(baseCanvas, "pointerdown", baseRect.left + baseOffsetX + 396 * baseScale, baseRect.top + baseOffsetY + 241 * baseScale, 3);
-      dispatchPointer(baseCanvas, "pointerup", baseRect.left + baseOffsetX + 396 * baseScale, baseRect.top + baseOffsetY + 241 * baseScale, 3);
+      const baseStageTwo = stageTargetPoint(baseCanvas, 2);
+      dispatchPointer(baseCanvas, "pointerdown", baseRect.left + baseStageTwo.x, baseRect.top + baseStageTwo.y, 3);
+      dispatchPointer(baseCanvas, "pointerup", baseRect.left + baseStageTwo.x, baseRect.top + baseStageTwo.y, 3);
       await nextFrame(2);
       if (baseBeforeClickSignature !== (baseCanvas.dataset.sceneSignature ?? "")) {
         throw new Error("base node click changed graph layout/content instead of only focusing inspector");
@@ -320,6 +321,9 @@ function App() {
           `rendered edge count diverged from backend graph: scene=${canvas.dataset.sceneEdgeCount}, graph=${canvas.dataset.graphEdgeCount}`,
         );
       }
+      if (canvas.dataset.layoutViolations) {
+        throw new Error(`layout violated grid constraints: ${canvas.dataset.layoutViolations}`);
+      }
       const beforeZoom = canvas.toDataURL();
       document.querySelector<HTMLButtonElement>(".zoom-group button:last-child")?.click();
       await nextFrame(2);
@@ -340,19 +344,10 @@ function App() {
 
       document.querySelector<HTMLButtonElement>(".canvas-toolbar button[aria-label='Fit']")?.click();
       await nextFrame(2);
-      const stageCount = nextPlan.graph.nodes.filter((node) => node.node_kind === "phase_splitter").length;
-      const columns = Math.max(1, Math.ceil(stageCount / 5));
-      const designWidth = Math.max(1080, 170 + (columns - 1) * 300 + 455);
-      const rowCount = Math.max(1, Math.min(5, stageCount));
-      const startY = Math.max(62, (730 - ((rowCount - 1) * 120 + 88)) / 2);
-      const scale = Math.min(rect.width / designWidth, rect.height / 730);
-      const offsetX = (rect.width - designWidth * scale) / 2;
-      const offsetY = (rect.height - 730 * scale) / 2;
-      const stageTwoX = rect.left + offsetX + (170 + 164 + 66) * scale;
-      const stageTwoY = rect.top + offsetY + (startY + 120 + 35) * scale;
+      const stageTwo = stageTargetPoint(canvas, 2);
       const beforeClickSignature = canvas.dataset.sceneSignature ?? "";
-      dispatchPointer(canvas, "pointerdown", stageTwoX, stageTwoY, 2);
-      dispatchPointer(canvas, "pointerup", stageTwoX, stageTwoY, 2);
+      dispatchPointer(canvas, "pointerdown", rect.left + stageTwo.x, rect.top + stageTwo.y, 2);
+      dispatchPointer(canvas, "pointerup", rect.left + stageTwo.x, rect.top + stageTwo.y, 2);
       await nextFrame(2);
       const afterClickSignature = canvas.dataset.sceneSignature ?? "";
       if (beforeClickSignature !== afterClickSignature) {
@@ -484,6 +479,22 @@ function dispatchPointer(
       pointerType: "mouse",
     }),
   );
+}
+
+function stageTargetPoint(canvas: HTMLCanvasElement, stageIndex: number) {
+  const targets = (canvas.dataset.stageTargets ?? "")
+    .split("|")
+    .filter(Boolean)
+    .map((item) => {
+      const [stage, point] = item.split(":");
+      const [x, y] = point.split(",").map(Number);
+      return { stageIndex: Number(stage), x, y };
+    });
+  const target = targets.find((item) => item.stageIndex === stageIndex);
+  if (!target || !Number.isFinite(target.x) || !Number.isFinite(target.y)) {
+    throw new Error(`stage ${stageIndex} hit target missing`);
+  }
+  return target;
 }
 
 function Header({

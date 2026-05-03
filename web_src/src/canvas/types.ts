@@ -68,6 +68,10 @@ export type CanvasScene = {
   edges: SceneEdge[];
   stages: Stage[];
   emptyMessage?: string;
+  layout?: {
+    violations: string[];
+    signature: string;
+  };
 };
 
 export type CanvasView = {

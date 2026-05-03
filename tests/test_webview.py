@@ -70,10 +70,14 @@ def test_webview_plan_payload_is_strict_json_and_diagram_ready() -> None:
     assert equipment_nodes
     assert "unit_index" in equipment_nodes[0]["parameters"]
     assert any(node["node_kind"] == "compressor" for node in equipment_nodes)
-    residue_nodes = [
+    assert not any(
+        node["node_kind"] == "conditioning_valve"
+        for node in graph["nodes"]  # type: ignore[index]
+    )
+    recycle_nodes = [
         node
         for node in graph["nodes"]  # type: ignore[index]
-        if node["node_kind"] == "residue"
+        if node["node_kind"] == "recycle"
     ]
-    assert residue_nodes
-    assert "residue_total_moles" in residue_nodes[0]["parameters"]
+    assert recycle_nodes
+    assert "residue_total_moles" in recycle_nodes[0]["parameters"]

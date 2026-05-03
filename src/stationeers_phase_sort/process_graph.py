@@ -34,7 +34,7 @@ def _solid_risk_stream_for_stage(stage: StageEvaluation) -> MaterialStream | Non
     ).without_tiny_entries()
 
 
-def _equipment_kind_for_stage(stage: StageEvaluation) -> str:
+def _equipment_kind_for_stage(stage: StageEvaluation) -> str | None:
     input_pressure = stage.feed_stream.pressure_kpa
     output_pressure = stage.pressure_kpa
     if input_pressure is not None and output_pressure is not None:
@@ -60,9 +60,9 @@ def _equipment_kind_for_stage(stage: StageEvaluation) -> str:
     return (
         "condensation_valve"
         if stage.operation_kind == "condense"
-        else "evaporation_heater"
+        else "expansion_valve"
         if stage.operation_kind == "evaporate"
-        else "conditioning_valve"
+        else None
     )
 
 
@@ -83,25 +83,29 @@ def plan_to_process_graph(plan: SearchPlan) -> ProcessGraph:
         solid_risk_stream = _solid_risk_stream_for_stage(stage)
 
         equipment_kind = _equipment_kind_for_stage(stage)
-        operation_node_id = f"{equipment_kind}_{record.stage_index:02d}"
-        nodes.append(
-            ProcessNode(
-                operation_node_id,
-                equipment_kind,
-                {
-                    "unit_index": unit_index,
-                    "stage_index": record.stage_index,
-                    "target_substance": stage.target_name,
-                    "operation_kind": stage.operation_kind,
-                    "selected_branch": stage.product_branch.value,
-                    "input_temperature_kelvin": stage.feed_stream.temperature_kelvin,
-                    "input_pressure_kpa": stage.feed_stream.pressure_kpa,
-                    "output_temperature_kelvin": stage.temperature_kelvin,
-                    "output_pressure_kpa": stage.pressure_kpa,
-                },
+        stage_input_node_id = previous_residue_node
+        if equipment_kind is not None:
+            operation_node_id = f"{equipment_kind}_{record.stage_index:02d}"
+            nodes.append(
+                ProcessNode(
+                    operation_node_id,
+                    equipment_kind,
+                    {
+                        "unit_index": unit_index,
+                        "stage_index": record.stage_index,
+                        "target_substance": stage.target_name,
+                        "operation_kind": stage.operation_kind,
+                        "selected_branch": stage.product_branch.value,
+                        "input_temperature_kelvin": stage.feed_stream.temperature_kelvin,
+                        "input_pressure_kpa": stage.feed_stream.pressure_kpa,
+                        "output_temperature_kelvin": stage.temperature_kelvin,
+                        "output_pressure_kpa": stage.pressure_kpa,
+                    },
+                )
             )
-        )
-        unit_index += 1
+            unit_index += 1
+            edges.append(ProcessEdge(previous_residue_node, operation_node_id, stage.feed_stream))
+            stage_input_node_id = operation_node_id
 
         nodes.append(
             ProcessNode(
@@ -144,8 +148,7 @@ def plan_to_process_graph(plan: SearchPlan) -> ProcessGraph:
                 },
             )
         )
-        edges.append(ProcessEdge(previous_residue_node, operation_node_id, stage.feed_stream))
-        edges.append(ProcessEdge(operation_node_id, stage_node_id, stage.feed_stream))
+        edges.append(ProcessEdge(stage_input_node_id, stage_node_id, stage.feed_stream))
         edges.append(ProcessEdge(stage_node_id, product_node_id, stage.product_stream))
 
         if solid_risk_stream is not None and solid_risk_stream.total_moles > 0.0:
@@ -162,10 +165,15 @@ def plan_to_process_graph(plan: SearchPlan) -> ProcessGraph:
             edges.append(ProcessEdge(stage_node_id, solid_risk_node_id, solid_risk_stream))
 
         if stage.residue_stream.total_moles > 0.0:
+            residue_kind = (
+                "recycle"
+                if record.stage_index < len(plan.product_records)
+                else "residue"
+            )
             nodes.append(
                 ProcessNode(
                     residue_node_id,
-                    "residue",
+                    residue_kind,
                     {
                         "unit_index": unit_index,
                         "stage_index": record.stage_index,

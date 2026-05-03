@@ -68,7 +68,8 @@ def test_plan_command_writes_outputs(tmp_path: Path, capsys) -> None:  # type: i
     assert equipment_nodes
     assert all("unit_index" in node["parameters"] for node in equipment_nodes)
     assert any(node["node_kind"] == "compressor" for node in equipment_nodes)
-    residue_nodes = [node for node in graph["nodes"] if node["node_kind"] == "residue"]
-    assert residue_nodes
-    assert all("residue_total_moles" in node["parameters"] for node in residue_nodes)
+    assert not any(node["node_kind"] == "conditioning_valve" for node in graph["nodes"])
+    recycle_nodes = [node for node in graph["nodes"] if node["node_kind"] == "recycle"]
+    assert recycle_nodes
+    assert all("residue_total_moles" in node["parameters"] for node in recycle_nodes)
     assert any(node["node_kind"] == "solid_risk" for node in graph["nodes"])

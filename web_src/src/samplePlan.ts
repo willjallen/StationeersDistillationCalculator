@@ -133,7 +133,7 @@ function graphFromStages(items: Stage[]): PlanPayload["graph"] {
     if (item.residue_total_moles > 0) {
       nodes.push({
         node_id: residueId,
-        node_kind: "residue",
+        node_kind: item.stage_index < items.length ? "recycle" : "residue",
         parameters: {
           unit_index: unitIndex,
           stage_index: item.stage_index,
@@ -166,7 +166,7 @@ function equipmentKindForStage(input: Stream, item: Stage) {
   if (temperatureDelta > 0.25) {
     return "heater";
   }
-  return item.product_branch === "liquid" ? "condensation_valve" : "evaporation_heater";
+  return item.product_branch === "liquid" ? "condensation_valve" : "expansion_valve";
 }
 
 function passesFor(index: number) {

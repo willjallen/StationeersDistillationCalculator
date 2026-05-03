@@ -49,6 +49,10 @@ const probe = Object.fromEntries(
 );
 
 const failures = [];
+const layoutMatch = stdout.match(/data-layout-violations="([^"]*)"/);
+if (layoutMatch?.[1]) {
+  failures.push(`layout violations: ${layoutMatch[1]}`);
+}
 if (probe.scrollX !== "0" || probe.scrollY !== "0") {
   failures.push(`page scroll detected (${probe.scrollX}, ${probe.scrollY})`);
 }

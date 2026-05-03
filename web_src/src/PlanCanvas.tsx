@@ -53,6 +53,12 @@ export function PlanCanvas({ plan, selectedStageIndex, onSelectStage, view, onVi
       canvas.dataset.graphEdgeCount = String(plan?.graph.edges.length ?? 0);
       canvas.dataset.sceneNodeCount = String(scene.nodes.length);
       canvas.dataset.sceneEdgeCount = String(scene.edges.length);
+      canvas.dataset.layoutViolations = scene.layout?.violations.join("|") ?? "";
+      canvas.dataset.layoutSignature = scene.layout?.signature ?? "";
+      canvas.dataset.stageTargets = scene.nodes
+        .filter((node) => node.id.startsWith("stage_") && node.stageIndex !== undefined)
+        .map((node) => `${node.stageIndex}:${Math.round(node.rect.x + node.rect.w / 2)},${Math.round(node.rect.y + node.rect.h / 2)}`)
+        .join("|");
       canvas.dataset.sceneSignature = scene.nodes
         .map((node) =>
           [
