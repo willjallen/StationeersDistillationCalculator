@@ -74,10 +74,16 @@ def test_webview_plan_payload_is_strict_json_and_diagram_ready() -> None:
         node["node_kind"] == "conditioning_valve"
         for node in graph["nodes"]  # type: ignore[index]
     )
-    recycle_nodes = [
-        node
+    assert not any(
+        node["node_kind"] == "recycle"
         for node in graph["nodes"]  # type: ignore[index]
-        if node["node_kind"] == "recycle"
-    ]
-    assert recycle_nodes
-    assert "residue_total_moles" in recycle_nodes[0]["parameters"]
+    )
+    assert any(
+        edge["source_node_id"].startswith("stage_")
+        and (
+            edge["destination_node_id"].startswith("stage_")
+            or edge["destination_node_id"].split("_", 1)[0]
+            in {"compressor", "cooler", "heater", "expansion", "condensation"}
+        )
+        for edge in graph["edges"]  # type: ignore[index]
+    )

@@ -86,10 +86,11 @@ def plan_to_process_graph(plan: SearchPlan) -> ProcessGraph:
     ]
     edges: list[ProcessEdge] = []
 
-    previous_residue_node = "source"
+    previous_feed_node = "source"
     unit_index = 1
-    for record in plan.product_records:
+    for record_position, record in enumerate(plan.product_records):
         stage = record.stage
+        is_final_record = record_position == len(plan.product_records) - 1
         stage_node_id = f"stage_{record.stage_index:02d}"
         product_node_id = f"product_{stage.target_name.lower().replace(' ', '_')}"
         polishing_node_id = f"polishing_recycle_{record.stage_index:02d}"
@@ -112,7 +113,7 @@ def plan_to_process_graph(plan: SearchPlan) -> ProcessGraph:
             product_purity = stage.product_purity
 
         equipment_kind = _equipment_kind_for_stage(stage)
-        stage_input_node_id = previous_residue_node
+        stage_input_node_id = previous_feed_node
         if equipment_kind is not None:
             operation_node_id = f"{equipment_kind}_{record.stage_index:02d}"
             nodes.append(
@@ -133,7 +134,7 @@ def plan_to_process_graph(plan: SearchPlan) -> ProcessGraph:
                 )
             )
             unit_index += 1
-            edges.append(ProcessEdge(previous_residue_node, operation_node_id, stage.feed_stream))
+            edges.append(ProcessEdge(previous_feed_node, operation_node_id, stage.feed_stream))
             stage_input_node_id = operation_node_id
 
         nodes.append(
@@ -243,16 +244,11 @@ def plan_to_process_graph(plan: SearchPlan) -> ProcessGraph:
             )
             edges.append(ProcessEdge(stage_node_id, solid_risk_node_id, solid_risk_stream))
 
-        if stage.residue_stream.total_moles > 0.0:
-            residue_kind = (
-                "recycle"
-                if record.stage_index < len(plan.product_records)
-                else "residue"
-            )
+        if stage.residue_stream.total_moles > 0.0 and is_final_record:
             nodes.append(
                 ProcessNode(
                     residue_node_id,
-                    residue_kind,
+                    "residue",
                     {
                         "unit_index": unit_index,
                         "stage_index": record.stage_index,
@@ -264,6 +260,7 @@ def plan_to_process_graph(plan: SearchPlan) -> ProcessGraph:
             )
             unit_index += 1
             edges.append(ProcessEdge(stage_node_id, residue_node_id, stage.residue_stream))
-            previous_residue_node = residue_node_id
+
+        previous_feed_node = stage_node_id
 
     return ProcessGraph(nodes=tuple(nodes), edges=tuple(edges))

@@ -32,32 +32,47 @@ export type GridLayoutResult = {
 
 const NODE_SIZES: Record<GridNodeType, { w: number; h: number }> = {
   source: { w: 7, h: 7 },
-  equipment: { w: 10, h: 5 },
-  separator: { w: 10, h: 6 },
-  product: { w: 10, h: 5 },
-  recycle: { w: 8, h: 3 },
-  residue: { w: 10, h: 4 },
-  risk: { w: 10, h: 4 },
+  equipment: { w: 11, h: 6 },
+  separator: { w: 12, h: 7 },
+  product: { w: 12, h: 6 },
+  recycle: { w: 9, h: 4 },
+  residue: { w: 12, h: 5 },
+  risk: { w: 12, h: 5 },
 };
 
-const PRODUCT_OFFSETS = [-8, 8, -12, 12, -16, 16, -20, 20];
+type StageSlot = {
+  order: number;
+  column: number;
+  row: number;
+  baseX: number;
+  centerY: number;
+};
 
 export function layoutProcessGraph(plan: PlanPayload): GridLayoutResult {
   const stageNodes = sortedStageNodes(plan.graph.nodes);
   const stageCount = stageNodes.length;
-  const stageStep = 14;
-  const designGridWidth = Math.max(90, 38 + Math.max(0, stageCount - 1) * stageStep + 14);
-  const designGridHeight = Math.max(58, 44 + Math.min(18, Math.ceil(stageCount / 2) * 2));
+  const stageGrid = stageGridForCount(stageCount);
+  const designGridWidth = stageGrid.width;
+  const designGridHeight = stageGrid.height;
   const centerY = Math.floor(designGridHeight / 2);
   const solver = new GridPlacementSolver(designGridWidth, designGridHeight);
   const placements: GridPlacement[] = [];
+  const placementById = new Map<string, GridPlacement>();
+  const incomingByDestination = new Map(plan.graph.edges.map((edge) => [edge.destination_node_id, edge]));
 
   const source = plan.graph.nodes.find((node) => node.node_id === "source");
   if (source) {
-    placements.push(solver.place(source, "source", 2, centerY - Math.floor(NODE_SIZES.source.h / 2)));
+    placeAndTrack(
+      placements,
+      placementById,
+      solver.place(source, "source", 2, centerY - Math.floor(NODE_SIZES.source.h / 2)),
+    );
   }
 
   const stageOrder = new Map(stageNodes.map((node, index) => [stageIndexForNode(node) ?? index + 1, index]));
+  const stageSlots = stageNodes.map((_, order) => stageSlotForOrder(order, stageCount, centerY));
+  const deferredNodes: ProcessGraphNode[] = [];
+
   plan.graph.nodes.forEach((node) => {
     if (node.node_id === "source") {
       return;
@@ -72,11 +87,42 @@ export function layoutProcessGraph(plan: PlanPayload): GridLayoutResult {
     }
 
     const stageNode = stageNodes[order];
-    const stageY = centerY + stageLaneOffset(order, stageCount);
-    const baseX = 10 + order * stageStep;
+    const slot = stageSlots[order];
     const type = typeForNode(node);
-    const preferred = preferredGridPosition(type, node, stageNode, order, baseX, stageY);
-    placements.push(solver.place(node, type, preferred.x, preferred.y, stageIndex));
+    if (type !== "equipment" && type !== "separator") {
+      deferredNodes.push(node);
+      return;
+    }
+    const preferred = preferredGridPosition(type, node, stageNode, slot);
+    placeAndTrack(
+      placements,
+      placementById,
+      solver.place(node, type, preferred.x, preferred.y, stageIndex),
+    );
+  });
+
+  deferredNodes.sort(deferredNodeSort).forEach((node) => {
+    const stageIndex = stageIndexForNode(node);
+    if (stageIndex === undefined) {
+      return;
+    }
+    const order = stageOrder.get(stageIndex);
+    if (order === undefined) {
+      return;
+    }
+    const stageNode = stageNodes[order];
+    const slot = stageSlots[order];
+    const type = typeForNode(node);
+    const incoming = incomingByDestination.get(node.node_id);
+    const sourcePlacement = incoming ? placementById.get(incoming.source_node_id) : undefined;
+    const preferred = sourcePlacement
+      ? preferredConnectedGridPosition(type, node, stageNode, slot, sourcePlacement.grid)
+      : preferredGridPosition(type, node, stageNode, slot);
+    placeAndTrack(
+      placements,
+      placementById,
+      solver.place(node, type, preferred.x, preferred.y, stageIndex, searchOptionsForType(type)),
+    );
   });
 
   placements.sort((left, right) => placementSort(left, right));
@@ -86,6 +132,15 @@ export function layoutProcessGraph(plan: PlanPayload): GridLayoutResult {
     designHeight: designGridHeight * GRID_CELL,
     diagnostics: validateGridLayout(placements, plan.graph.edges),
   };
+}
+
+function placeAndTrack(
+  placements: GridPlacement[],
+  placementById: Map<string, GridPlacement>,
+  placement: GridPlacement,
+) {
+  placements.push(placement);
+  placementById.set(placement.graphNode.node_id, placement);
 }
 
 export function gridRectToDesignRect(rect: GridRect): Rect {
@@ -112,39 +167,89 @@ function preferredGridPosition(
   type: GridNodeType,
   node: ProcessGraphNode,
   stageNode: ProcessGraphNode,
-  order: number,
-  baseX: number,
-  stageY: number,
+  slot: StageSlot,
 ) {
   const size = NODE_SIZES[type];
   if (type === "equipment") {
-    return { x: baseX, y: stageY - Math.floor(size.h / 2) };
+    return { x: slot.baseX, y: slot.centerY - Math.floor(size.h / 2) };
   }
   if (type === "separator") {
-    return { x: baseX + 12, y: stageY - Math.floor(size.h / 2) };
+    return { x: slot.baseX + 12, y: slot.centerY - Math.floor(size.h / 2) };
   }
   if (type === "product") {
-    const direction = branchForNode(node) === "gas" ? -1 : 1;
-    const offset = PRODUCT_OFFSETS[order % PRODUCT_OFFSETS.length] * direction;
-    return { x: baseX + 24, y: stageY + offset - Math.floor(size.h / 2) };
+    const direction = leafDirectionForSlot(slot, branchForNode(node));
+    return {
+      x: slot.baseX + 24,
+      y: slot.centerY + direction * 13 - Math.floor(size.h / 2),
+    };
   }
   if (type === "risk") {
-    return { x: baseX + 24, y: stageY + 9 };
+    return { x: slot.baseX + 24, y: slot.centerY + 11 };
   }
   if (type === "residue") {
-    return { x: baseX + 24, y: stageY + 9 };
+    return { x: slot.baseX + 24, y: slot.centerY + 11 };
   }
   if (type === "recycle") {
-    const direction = branchForNode(stageNode) === "gas" ? 1 : -1;
-    return { x: baseX + 13, y: stageY + direction * 6 };
+    const direction = node.node_kind === "polishing_recycle"
+      ? leafDirectionForSlot(slot, branchForNode(stageNode))
+      : -leafDirectionForSlot(slot, branchForNode(stageNode));
+    return {
+      x: slot.baseX + (node.node_kind === "polishing_recycle" ? 21 : 15),
+      y: slot.centerY + direction * 8 - Math.floor(size.h / 2),
+    };
   }
-  return { x: baseX, y: stageY };
+  return { x: slot.baseX, y: slot.centerY };
+}
+
+function preferredConnectedGridPosition(
+  type: GridNodeType,
+  node: ProcessGraphNode,
+  stageNode: ProcessGraphNode,
+  slot: StageSlot,
+  source: GridRect,
+) {
+  const size = NODE_SIZES[type];
+  const sourceCenterY = source.y + Math.floor(source.h / 2);
+  const direction = leafDirectionForSlot(slot, branchForNode(node));
+  if (type === "product") {
+    return {
+      x: source.x + source.w + 4,
+      y: sourceCenterY + direction * 10 - Math.floor(size.h / 2),
+    };
+  }
+  if (type === "risk" || type === "residue") {
+    return {
+      x: source.x + source.w + 4,
+      y: sourceCenterY + 11 - Math.floor(size.h / 2),
+    };
+  }
+  if (type === "recycle") {
+    const recycleDirection = node.node_kind === "polishing_recycle"
+      ? direction
+      : -leafDirectionForSlot(slot, branchForNode(stageNode));
+    return {
+      x: source.x + Math.max(4, Math.floor(source.w / 2)),
+      y: sourceCenterY + recycleDirection * 8 - Math.floor(size.h / 2),
+    };
+  }
+  return preferredGridPosition(type, node, stageNode, slot);
+}
+
+function searchOptionsForType(type: GridNodeType) {
+  if (type === "product" || type === "risk" || type === "residue") {
+    return { xLimit: 30, yLimit: 28, verticalPenalty: 4 };
+  }
+  if (type === "recycle") {
+    return { xLimit: 18, yLimit: 24, verticalPenalty: 3 };
+  }
+  return undefined;
 }
 
 function validateGridLayout(placements: GridPlacement[], edges: ProcessGraphEdge[]) {
   const violations: string[] = [];
   const byId = new Map(placements.map((placement) => [placement.graphNode.node_id, placement]));
   const sizeByType = new Map<GridNodeType, string>();
+  const productDistanceLimit = placements.length > 40 ? 72 : 46;
 
   placements.forEach((placement) => {
     if (!Number.isInteger(placement.grid.x) || !Number.isInteger(placement.grid.y)) {
@@ -175,12 +280,16 @@ function validateGridLayout(placements: GridPlacement[], edges: ProcessGraphEdge
       return;
     }
     const isLeaf = ["product", "risk", "residue"].includes(destination.type);
+    const isCarryoverPath = source.type === "separator" && destination.type === "equipment";
+    const isRecyclePath = source.type === "recycle" || destination.type === "recycle" || isCarryoverPath;
     if (destination.grid.x < source.grid.x && !isLeaf) {
-      violations.push(`${edge.source_node_id}->${edge.destination_node_id} does not flow left-to-right`);
+      if (!isRecyclePath) {
+        violations.push(`${edge.source_node_id}->${edge.destination_node_id} does not flow left-to-right`);
+      }
     }
     if (destination.type === "product") {
       const gridDistance = Math.abs(destination.grid.x - source.grid.x) + Math.abs(destination.grid.y - source.grid.y);
-      if (gridDistance > 38) {
+      if (gridDistance > productDistanceLimit) {
         violations.push(`${destination.graphNode.node_id} is not close to producer ${source.graphNode.node_id}`);
       }
     }
@@ -208,19 +317,19 @@ class GridPlacementSolver {
     preferredX: number,
     preferredY: number,
     stageIndex?: number,
+    search: { xLimit?: number; yLimit?: number; verticalPenalty?: number } = {},
   ): GridPlacement {
     const size = NODE_SIZES[type];
-    const xCandidates = candidateOffsets(8).map((offset) => clamp(preferredX + offset, 0, this.width - size.w));
-    const yCandidates = candidateOffsets(Math.ceil(this.height / 2)).map((offset) => clamp(preferredY + offset, 0, this.height - size.h));
+    const xCandidates = unique(candidateOffsets(search.xLimit ?? 8).map((offset) => clamp(preferredX + offset, 0, this.width - size.w)));
+    const yCandidates = unique(candidateOffsets(search.yLimit ?? Math.ceil(this.height / 2)).map((offset) => clamp(preferredY + offset, 0, this.height - size.h)));
+    const candidates = candidatePairs(xCandidates, yCandidates, preferredX, preferredY, search.verticalPenalty ?? 1);
 
-    for (const x of unique(xCandidates)) {
-      for (const y of unique(yCandidates)) {
-        const candidate = { x, y, w: size.w, h: size.h };
-        if (!this.placements.some((placement) => gridRectsTooClose(candidate, placement.grid, MIN_GRID_GAP))) {
-          const placement = { graphNode, stageIndex, type, grid: candidate };
-          this.placements.push(placement);
-          return placement;
-        }
+    for (const candidate of candidates) {
+      const rect = { x: candidate.x, y: candidate.y, w: size.w, h: size.h };
+      if (!this.placements.some((placement) => gridRectsTooClose(rect, placement.grid, MIN_GRID_GAP))) {
+        const placement = { graphNode, stageIndex, type, grid: rect };
+        this.placements.push(placement);
+        return placement;
       }
     }
 
@@ -272,12 +381,68 @@ function branchForNode(node: ProcessGraphNode): "gas" | "liquid" {
   return node.parameters.selected_branch === "gas" ? "gas" : "liquid";
 }
 
-function stageLaneOffset(index: number, stageCount: number) {
+function stageGridForCount(stageCount: number) {
+  const rows = rowsPerColumn(stageCount);
+  const columns = Math.max(1, Math.ceil(Math.max(1, stageCount) / rows));
+  const columnStep = columnStepForRows(rows);
+  return {
+    width: Math.max(90, 12 + (columns - 1) * columnStep + 44),
+    height: rows === 1 ? 62 : rows === 2 ? 86 : Math.max(104, 86 + (columns > 5 ? 8 : 0)),
+  };
+}
+
+function stageSlotForOrder(order: number, stageCount: number, centerY: number): StageSlot {
+  const rows = rowsPerColumn(stageCount);
+  const column = Math.floor(order / rows);
+  const row = order % rows;
+  const columnStep = columnStepForRows(rows);
+  const rowOffsets = rowOffsetsForRows(rows);
+  const stagger = rows === 1 ? 0 : columnStagger(column, rows);
+  return {
+    order,
+    column,
+    row,
+    baseX: 10 + column * columnStep + row * 2,
+    centerY: centerY + rowOffsets[row] + stagger,
+  };
+}
+
+function rowsPerColumn(stageCount: number) {
   if (stageCount <= 3) {
-    return [0, -10, 10][index] ?? 0;
+    return 1;
   }
-  const offsets = [0, -8, 8, -16, 16, -24, 24];
-  return offsets[index % offsets.length] ?? 0;
+  return stageCount <= 8 ? 2 : 3;
+}
+
+function columnStepForRows(rows: number) {
+  return rows === 1 ? 20 : rows === 2 ? 18 : 17;
+}
+
+function rowOffsetsForRows(rows: number) {
+  if (rows === 1) {
+    return [0, -12, 12];
+  }
+  if (rows === 2) {
+    return [-13, 14];
+  }
+  return [-24, 0, 24];
+}
+
+function columnStagger(column: number, rows: number) {
+  if (rows === 2) {
+    return [0, -3, 3, -1, 1][column % 5] ?? 0;
+  }
+  return [0, 4, -4, 2, -2][column % 5] ?? 0;
+}
+
+function leafDirectionForSlot(slot: StageSlot, branch: "gas" | "liquid") {
+  if (slot.row === 0) {
+    return branch === "gas" ? -1 : 1;
+  }
+  if (slot.row === 1) {
+    return branch === "gas" ? 1 : -1;
+  }
+  return branch === "gas" ? -1 : 1;
 }
 
 function gridRectsTooClose(left: GridRect, right: GridRect, gap: number) {
@@ -297,6 +462,33 @@ function candidateOffsets(limit: number) {
   return offsets;
 }
 
+function candidatePairs(
+  xCandidates: number[],
+  yCandidates: number[],
+  preferredX: number,
+  preferredY: number,
+  verticalPenalty: number,
+) {
+  return xCandidates
+    .flatMap((x) => yCandidates.map((y) => ({ x, y })))
+    .sort((left, right) =>
+      candidateScore(left.x, left.y, preferredX, preferredY, verticalPenalty)
+      - candidateScore(right.x, right.y, preferredX, preferredY, verticalPenalty)
+      || left.x - right.x
+      || left.y - right.y,
+    );
+}
+
+function candidateScore(
+  x: number,
+  y: number,
+  preferredX: number,
+  preferredY: number,
+  verticalPenalty: number,
+) {
+  return Math.abs(x - preferredX) + Math.abs(y - preferredY) * verticalPenalty;
+}
+
 function unique(values: number[]) {
   return [...new Set(values)];
 }
@@ -309,6 +501,32 @@ function placementSort(left: GridPlacement, right: GridPlacement) {
     return left.grid.y - right.grid.y;
   }
   return left.graphNode.node_id.localeCompare(right.graphNode.node_id);
+}
+
+function deferredNodeSort(left: ProcessGraphNode, right: ProcessGraphNode) {
+  const leftRank = deferredRank(typeForNode(left));
+  const rightRank = deferredRank(typeForNode(right));
+  if (leftRank !== rightRank) {
+    return leftRank - rightRank;
+  }
+  return (stageIndexForNode(left) ?? 0) - (stageIndexForNode(right) ?? 0)
+    || left.node_id.localeCompare(right.node_id);
+}
+
+function deferredRank(type: GridNodeType) {
+  if (type === "recycle") {
+    return 0;
+  }
+  if (type === "product") {
+    return 1;
+  }
+  if (type === "risk") {
+    return 2;
+  }
+  if (type === "residue") {
+    return 3;
+  }
+  return 4;
 }
 
 function clamp(value: number, min: number, max: number) {

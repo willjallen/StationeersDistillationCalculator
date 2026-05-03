@@ -208,7 +208,7 @@ function edgeFromNodes(
   return {
     id: `${graphEdge.source_node_id}-${graphEdge.destination_node_id}-${index}`,
     tone,
-    points: routeBetween(source.rect, destination.rect),
+    points: routeBetween(source.rect, destination.rect, tone),
     width: tone === "recycle" ? Math.max(1.35, pipeWidth(moles) * 0.68) : pipeWidth(moles),
     label: stageCount <= 3 && moles > 0 ? `${numberText(moles, 1)} mol` : undefined,
     labelPoint: labelPointBetween(source.rect, destination.rect),
@@ -216,7 +216,16 @@ function edgeFromNodes(
   };
 }
 
-function routeBetween(source: Rect, destination: Rect): Point[] {
+function routeBetween(source: Rect, destination: Rect, tone: EdgeTone): Point[] {
+  if (tone === "recycle" && destination.x < source.x + source.w) {
+    const loopY = Math.min(source.y, destination.y) - Math.max(28, Math.min(source.h, destination.h) * 0.65);
+    return [
+      port(source, "top"),
+      { x: centerX(source), y: loopY },
+      { x: centerX(destination), y: loopY },
+      port(destination, "top"),
+    ];
+  }
   if (destination.x >= source.x + source.w) {
     const midX = (source.x + source.w + destination.x) / 2;
     return [

@@ -76,7 +76,8 @@ function graphFromStages(items: Stage[]): PlanPayload["graph"] {
   let previous = "source";
   let previousStream = stream(100, "Feed", 294.39, 100);
   let unitIndex = 1;
-  items.forEach((item) => {
+  items.forEach((item, index) => {
+    const isFinalStage = index === items.length - 1;
     const stageId = `stage_${String(item.stage_index).padStart(2, "0")}`;
     const operationKind = equipmentKindForStage(previousStream, item);
     const operationId = `${operationKind}_${String(item.stage_index).padStart(2, "0")}`;
@@ -130,10 +131,10 @@ function graphFromStages(items: Stage[]): PlanPayload["graph"] {
     edges.push({ source_node_id: previous, destination_node_id: operationId, stream: feed });
     edges.push({ source_node_id: operationId, destination_node_id: stageId, stream: feed });
     edges.push({ source_node_id: stageId, destination_node_id: productId, stream: item.product_stream });
-    if (item.residue_total_moles > 0) {
+    if (item.residue_total_moles > 0 && isFinalStage) {
       nodes.push({
         node_id: residueId,
-        node_kind: item.stage_index < items.length ? "recycle" : "residue",
+        node_kind: "residue",
         parameters: {
           unit_index: unitIndex,
           stage_index: item.stage_index,
@@ -144,9 +145,9 @@ function graphFromStages(items: Stage[]): PlanPayload["graph"] {
       });
       unitIndex += 1;
       edges.push({ source_node_id: stageId, destination_node_id: residueId, stream: item.residue_stream });
-      previous = residueId;
-      previousStream = item.residue_stream;
     }
+    previous = stageId;
+    previousStream = item.residue_stream;
   });
   return { nodes, edges };
 }
