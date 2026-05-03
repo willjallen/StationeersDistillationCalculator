@@ -16,6 +16,16 @@ const snapshotSelection = [
   "Methane",
   "Ozone",
 ];
+const eightComponentSelection = [
+  "Carbon Dioxide",
+  "Nitrogen",
+  "Oxygen",
+  "Hydrogen",
+  "Methane",
+  "Ozone",
+  "Nitrous Oxide",
+  "Pollutant",
+];
 const defaultCanvasView: CanvasView = { zoom: 1, panX: 0, panY: 0 };
 
 const initialComposition: Record<string, number> = {
@@ -45,6 +55,7 @@ const fallbackSubstances: Substance[] = [
 function App() {
   const query = new URLSearchParams(window.location.search);
   const snapshotMode = query.has("snapshot");
+  const scenarioSelection = query.get("scenario") === "eight-components" ? eightComponentSelection : null;
   const functionalSmokeMode = query.has("functional-smoke");
   const functionalSmokeRunRef = useRef(false);
   const [meta, setMeta] = useState<MetaPayload | null>(null);
@@ -52,7 +63,7 @@ function App() {
   const [status, setStatus] = useState(snapshotMode ? "Saved 2m ago" : "Loading");
   const [running, setRunning] = useState(false);
   const [preset, setPreset] = useState("base-air");
-  const [selected, setSelected] = useState<string[]>(snapshotMode ? snapshotSelection : baseAirSelection);
+  const [selected, setSelected] = useState<string[]>(snapshotMode ? snapshotSelection : scenarioSelection ?? baseAirSelection);
   const [composition, setComposition] = useState<Record<string, number>>(initialComposition);
   const [pressureModel, setPressureModel] = useState<"total" | "partial">("total");
   const [searchMode, setSearchMode] = useState<"greedy" | "beam">("greedy");
@@ -88,13 +99,14 @@ function App() {
           const defaultPresetSubstances =
             payload.presets.find((item) => item.name === defaultPreset)?.substances ?? baseAirSelection;
           setPreset(defaultPreset);
-          setSelected(defaultPresetSubstances);
-          setComposition((current) => ensureComposition(defaultPresetSubstances, current));
+          const nextSelection = scenarioSelection ?? defaultPresetSubstances;
+          setSelected(nextSelection);
+          setComposition((current) => ensureComposition(nextSelection, current));
         }
         setStatus(snapshotMode ? "Saved 2m ago" : "Ready");
       })
       .catch((error: Error) => setStatus(error.message));
-  }, [snapshotMode]);
+  }, [scenarioSelection, snapshotMode]);
 
   useEffect(() => {
     if (meta && !snapshotMode) {

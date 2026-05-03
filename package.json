@@ -8,6 +8,7 @@
     "check:web": "tsc --noEmit",
     "capture:web": "node web_src/scripts/capture-webview.mjs",
     "capture:target": "node web_src/scripts/capture-webview.mjs --url http://127.0.0.1:8765/?snapshot=1 --width 1448 --height 1086 --output .tmp-smoke/webui-current.png",
+    "capture:eight": "node web_src/scripts/capture-webview.mjs --url http://127.0.0.1:8765/?scenario=eight-components --width 1448 --height 1086 --output .tmp-smoke/webui-eight-components.png --virtual-time-budget 6000",
     "smoke:functional": "node web_src/scripts/functional-smoke.mjs",
     "smoke:web": "node web_src/scripts/visual-smoke.mjs"
   },

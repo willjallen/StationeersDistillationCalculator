@@ -11,6 +11,9 @@ const height = Number(args.height ?? process.env.WEBVIEW_HEIGHT ?? 1086);
 const output = resolve(args.output ?? process.env.WEBVIEW_SCREENSHOT ?? ".tmp-smoke/webui-current.png");
 const chrome = args.chrome ?? process.env.CHROME_PATH ?? findChrome();
 const timeout = Number(args.timeout ?? process.env.WEBVIEW_CAPTURE_TIMEOUT_MS ?? 12000);
+const virtualTimeBudget = Number(
+  args.virtualTimeBudget ?? args["virtual-time-budget"] ?? process.env.WEBVIEW_CAPTURE_VIRTUAL_TIME_MS ?? 0,
+);
 const windowsChrome = chrome?.toLowerCase().endsWith(".exe") ?? false;
 const chromeExtraHeight = windowsChrome
   ? Number(args.chromeExtraHeight ?? process.env.WEBVIEW_CHROME_EXTRA_HEIGHT ?? 104)
@@ -45,6 +48,10 @@ const chromeArgs = [
   `--screenshot=${pathForChrome(rawOutput, chrome)}`,
   url,
 ];
+
+if (virtualTimeBudget > 0) {
+  chromeArgs.splice(chromeArgs.length - 1, 0, `--virtual-time-budget=${virtualTimeBudget}`);
+}
 
 await execFileAsync(chrome, chromeArgs, { timeout, maxBuffer: 1024 * 1024 });
 

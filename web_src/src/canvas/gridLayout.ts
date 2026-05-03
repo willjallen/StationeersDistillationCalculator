@@ -46,6 +46,8 @@ type StageSlot = {
   row: number;
   baseX: number;
   centerY: number;
+  leafDirection: -1 | 1;
+  verticalBundle: boolean;
 };
 
 export function layoutProcessGraph(plan: PlanPayload): GridLayoutResult {
@@ -171,23 +173,40 @@ function preferredGridPosition(
 ) {
   const size = NODE_SIZES[type];
   if (type === "equipment") {
+    if (slot.verticalBundle) {
+      return {
+        x: slot.baseX,
+        y: slot.centerY - slot.leafDirection * 10 - Math.floor(size.h / 2),
+      };
+    }
     return { x: slot.baseX, y: slot.centerY - Math.floor(size.h / 2) };
   }
   if (type === "separator") {
-    return { x: slot.baseX + 12, y: slot.centerY - Math.floor(size.h / 2) };
+    return {
+      x: slot.baseX + (slot.verticalBundle ? 0 : 12),
+      y: slot.centerY - Math.floor(size.h / 2),
+    };
   }
   if (type === "product") {
     const direction = leafDirectionForSlot(slot, branchForNode(node));
     return {
-      x: slot.baseX + 24,
+      x: slot.baseX + (slot.verticalBundle ? 0 : 24),
       y: slot.centerY + direction * 13 - Math.floor(size.h / 2),
     };
   }
   if (type === "risk") {
-    return { x: slot.baseX + 24, y: slot.centerY + 11 };
+    const direction = leafDirectionForSlot(slot, branchForNode(stageNode));
+    return {
+      x: slot.baseX + (slot.verticalBundle ? 0 : 24),
+      y: slot.centerY + direction * 20 - Math.floor(size.h / 2),
+    };
   }
   if (type === "residue") {
-    return { x: slot.baseX + 24, y: slot.centerY + 11 };
+    const direction = leafDirectionForSlot(slot, branchForNode(stageNode));
+    return {
+      x: slot.baseX + (slot.verticalBundle ? 0 : 24),
+      y: slot.centerY + direction * 20 - Math.floor(size.h / 2),
+    };
   }
   if (type === "recycle") {
     const direction = node.node_kind === "polishing_recycle"
@@ -213,14 +232,14 @@ function preferredConnectedGridPosition(
   const direction = leafDirectionForSlot(slot, branchForNode(node));
   if (type === "product") {
     return {
-      x: source.x + source.w + 4,
+      x: slot.verticalBundle ? source.x : source.x + source.w + 4,
       y: sourceCenterY + direction * 10 - Math.floor(size.h / 2),
     };
   }
   if (type === "risk" || type === "residue") {
     return {
-      x: source.x + source.w + 4,
-      y: sourceCenterY + 11 - Math.floor(size.h / 2),
+      x: slot.verticalBundle ? source.x : source.x + source.w + 4,
+      y: sourceCenterY + direction * 18 - Math.floor(size.h / 2),
     };
   }
   if (type === "recycle") {
@@ -382,60 +401,72 @@ function branchForNode(node: ProcessGraphNode): "gas" | "liquid" {
 }
 
 function stageGridForCount(stageCount: number) {
-  const rows = rowsPerColumn(stageCount);
-  const columns = Math.max(1, Math.ceil(Math.max(1, stageCount) / rows));
-  const columnStep = columnStepForRows(rows);
+  const lanes = laneCountForStageCount(stageCount);
+  const columnStep = columnStepForStageCount(stageCount);
+  const columns = Math.max(1, stageCount);
   return {
     width: Math.max(90, 12 + (columns - 1) * columnStep + 44),
-    height: rows === 1 ? 62 : rows === 2 ? 86 : Math.max(104, 86 + (columns > 5 ? 8 : 0)),
+    height: lanes === 1 ? 62 : lanes === 2 ? 96 : 118,
   };
 }
 
 function stageSlotForOrder(order: number, stageCount: number, centerY: number): StageSlot {
-  const rows = rowsPerColumn(stageCount);
-  const column = Math.floor(order / rows);
-  const row = order % rows;
-  const columnStep = columnStepForRows(rows);
-  const rowOffsets = rowOffsetsForRows(rows);
-  const stagger = rows === 1 ? 0 : columnStagger(column, rows);
+  const lanes = laneCountForStageCount(stageCount);
+  const stagesPerLane = Math.ceil(Math.max(1, stageCount) / lanes);
+  const row = lanes === 1 ? 0 : Math.min(lanes - 1, Math.floor(order / stagesPerLane));
+  const column = order;
+  const columnStep = columnStepForStageCount(stageCount);
+  const rowOffsets = rowOffsetsForLanes(lanes);
+  const verticalBundle = stageCount > 3;
   return {
     order,
     column,
     row,
     baseX: 10 + column * columnStep + row * 2,
-    centerY: centerY + rowOffsets[row] + stagger,
+    centerY: centerY + rowOffsets[row],
+    leafDirection: leafDirectionForRow(row, lanes),
+    verticalBundle,
   };
 }
 
-function rowsPerColumn(stageCount: number) {
+function laneCountForStageCount(stageCount: number) {
   if (stageCount <= 3) {
     return 1;
   }
   return stageCount <= 8 ? 2 : 3;
 }
 
-function columnStepForRows(rows: number) {
-  return rows === 1 ? 20 : rows === 2 ? 18 : 17;
+function columnStepForStageCount(stageCount: number) {
+  return stageCount <= 3 ? 20 : 14;
 }
 
-function rowOffsetsForRows(rows: number) {
-  if (rows === 1) {
+function rowOffsetsForLanes(lanes: number) {
+  if (lanes === 1) {
     return [0, -12, 12];
   }
-  if (rows === 2) {
-    return [-13, 14];
+  if (lanes === 2) {
+    return [-22, 22];
   }
-  return [-24, 0, 24];
+  return [-34, 0, 34];
 }
 
-function columnStagger(column: number, rows: number) {
-  if (rows === 2) {
-    return [0, -3, 3, -1, 1][column % 5] ?? 0;
+function leafDirectionForRow(row: number, lanes: number): -1 | 1 {
+  if (lanes === 1) {
+    return -1;
   }
-  return [0, 4, -4, 2, -2][column % 5] ?? 0;
+  if (row === 0) {
+    return -1;
+  }
+  if (row === lanes - 1) {
+    return 1;
+  }
+  return row % 2 === 0 ? -1 : 1;
 }
 
 function leafDirectionForSlot(slot: StageSlot, branch: "gas" | "liquid") {
+  if (slot.verticalBundle) {
+    return slot.leafDirection;
+  }
   if (slot.row === 0) {
     return branch === "gas" ? -1 : 1;
   }

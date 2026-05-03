@@ -253,6 +253,15 @@ function routeBetween(source: Rect, destination: Rect, tone: EdgeTone): Point[] 
       port(destination, "top"),
     ];
   }
+  if (destination.y + destination.h <= source.y) {
+    const midY = (destination.y + destination.h + source.y) / 2;
+    return [
+      port(source, "top"),
+      { x: centerX(source), y: midY },
+      { x: centerX(destination), y: midY },
+      port(destination, "bottom"),
+    ];
+  }
   const midX = Math.max(source.x + source.w + 28, destination.x + destination.w + 28);
   return [
     port(source, "right"),
