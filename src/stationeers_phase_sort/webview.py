@@ -487,6 +487,9 @@ def _graph_to_json(graph: ProcessGraph) -> dict[str, object]:
             {
                 "source_node_id": edge.source_node_id,
                 "destination_node_id": edge.destination_node_id,
+                "parameters": {
+                    key: _json_value(value) for key, value in edge.parameters.items()
+                },
                 "stream": _stream_to_json(edge.stream),
             }
             for edge in graph.edges

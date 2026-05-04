@@ -509,6 +509,7 @@ def _process_graph_to_jsonable(graph: ProcessGraph) -> dict[str, object]:
             {
                 "source_node_id": edge.source_node_id,
                 "destination_node_id": edge.destination_node_id,
+                "parameters": edge.parameters,
                 "stream": None
                 if edge.stream is None
                 else {

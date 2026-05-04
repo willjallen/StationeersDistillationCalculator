@@ -4,7 +4,7 @@ import type { Rect } from "./types";
 export const GRID_CELL = 12;
 export const MIN_GRID_GAP = 2;
 
-type GridNodeType = "source" | "equipment" | "separator" | "product" | "recycle" | "residue" | "risk";
+type GridNodeType = "source" | "equipment" | "separator" | "buffer" | "product" | "recycle" | "residue" | "risk";
 
 type GridRect = {
   x: number;
@@ -34,6 +34,7 @@ const NODE_SIZES: Record<GridNodeType, { w: number; h: number }> = {
   source: { w: 7, h: 7 },
   equipment: { w: 11, h: 6 },
   separator: { w: 12, h: 7 },
+  buffer: { w: 11, h: 5 },
   product: { w: 12, h: 6 },
   recycle: { w: 9, h: 4 },
   residue: { w: 12, h: 5 },
@@ -91,7 +92,7 @@ export function layoutProcessGraph(plan: PlanPayload): GridLayoutResult {
     const stageNode = stageNodes[order];
     const slot = stageSlots[order];
     const type = typeForNode(node);
-    if (type !== "equipment" && type !== "separator") {
+    if (type !== "equipment" && type !== "separator" && !(type === "buffer" && node.parameters.role === "feed")) {
       deferredNodes.push(node);
       return;
     }
@@ -157,12 +158,58 @@ export function gridRectToDesignRect(rect: GridRect): Rect {
 export function isOperationNodeKind(nodeKind: string) {
   return [
     "compressor",
+    "pressure_increaser",
+    "pressure_decreaser",
     "cooler",
     "heater",
     "expansion_valve",
     "condensation_valve",
+    "purge_valve",
+    "pressurant_valve",
     "evaporation_heater",
   ].includes(nodeKind);
+}
+
+function equipmentOffset(node: ProcessGraphNode) {
+  if (node.node_kind === "pressure_increaser" || node.node_kind === "pressure_decreaser") {
+    return 14;
+  }
+  if (node.parameters.role === "setpoint_delta") {
+    return 27;
+  }
+  if (node.node_kind === "expansion_valve") {
+    return 39;
+  }
+  if (node.parameters.role === "phase_hold_delta") {
+    return 53;
+  }
+  if (node.node_kind === "condensation_valve" || node.node_kind === "purge_valve" || node.node_kind === "pressurant_valve") {
+    return node.parameters.role ? 53 : 27;
+  }
+  return 12;
+}
+
+function equipmentDirection(node: ProcessGraphNode, stageNode: ProcessGraphNode, slot: StageSlot): -1 | 0 | 1 {
+  if (node.node_kind === "condensation_valve") {
+    return leafDirectionForSlot(slot, "liquid");
+  }
+  if (node.node_kind === "purge_valve" || node.node_kind === "expansion_valve") {
+    return leafDirectionForSlot(slot, "gas");
+  }
+  if (node.parameters.role === "phase_hold_delta") {
+    return leafDirectionForSlot(slot, branchForNode(stageNode)) === 1 ? -1 : 1;
+  }
+  return 0;
+}
+
+function equipmentVerticalDistance(node: ProcessGraphNode) {
+  if (node.node_kind === "condensation_valve" || node.node_kind === "purge_valve") {
+    return 8;
+  }
+  if (node.parameters.role === "phase_hold_delta") {
+    return 8;
+  }
+  return 0;
 }
 
 function preferredGridPosition(
@@ -173,38 +220,54 @@ function preferredGridPosition(
 ) {
   const size = NODE_SIZES[type];
   if (type === "equipment") {
+    const offset = equipmentOffset(node);
+    const direction = equipmentDirection(node, stageNode, slot);
     if (slot.verticalBundle) {
       return {
-        x: slot.baseX,
-        y: slot.centerY - slot.leafDirection * 10 - Math.floor(size.h / 2),
+        x: slot.baseX + offset,
+        y: slot.centerY + direction * equipmentVerticalDistance(node) - Math.floor(size.h / 2),
       };
     }
-    return { x: slot.baseX, y: slot.centerY - Math.floor(size.h / 2) };
+    return { x: slot.baseX + offset, y: slot.centerY + direction * equipmentVerticalDistance(node) - Math.floor(size.h / 2) };
   }
   if (type === "separator") {
     return {
-      x: slot.baseX + (slot.verticalBundle ? 0 : 12),
+      x: slot.baseX + (slot.verticalBundle ? 40 : 40),
       y: slot.centerY - Math.floor(size.h / 2),
+    };
+  }
+  if (type === "buffer") {
+    if (node.parameters.role === "feed") {
+      return {
+        x: slot.baseX,
+        y: slot.centerY - Math.floor(size.h / 2),
+      };
+    }
+    const branch = bufferBranchForNode(node);
+    const direction = leafDirectionForSlot(slot, branch);
+    return {
+      x: slot.baseX + (slot.verticalBundle ? 68 : 68),
+      y: slot.centerY + direction * 10 - Math.floor(size.h / 2),
     };
   }
   if (type === "product") {
     const direction = leafDirectionForSlot(slot, branchForNode(node));
     return {
-      x: slot.baseX + (slot.verticalBundle ? 0 : 24),
+      x: slot.baseX + (slot.verticalBundle ? 83 : 83),
       y: slot.centerY + direction * 13 - Math.floor(size.h / 2),
     };
   }
   if (type === "risk") {
     const direction = leafDirectionForSlot(slot, branchForNode(stageNode));
     return {
-      x: slot.baseX + (slot.verticalBundle ? 0 : 24),
+      x: slot.baseX + (slot.verticalBundle ? 83 : 83),
       y: slot.centerY + direction * 20 - Math.floor(size.h / 2),
     };
   }
   if (type === "residue") {
     const direction = leafDirectionForSlot(slot, branchForNode(stageNode));
     return {
-      x: slot.baseX + (slot.verticalBundle ? 0 : 24),
+      x: slot.baseX + (slot.verticalBundle ? 83 : 83),
       y: slot.centerY + direction * 20 - Math.floor(size.h / 2),
     };
   }
@@ -213,7 +276,7 @@ function preferredGridPosition(
       ? leafDirectionForSlot(slot, branchForNode(stageNode))
       : -leafDirectionForSlot(slot, branchForNode(stageNode));
     return {
-      x: slot.baseX + (node.node_kind === "polishing_recycle" ? 21 : 15),
+      x: slot.baseX + (node.node_kind === "polishing_recycle" ? 79 : 63),
       y: slot.centerY + direction * 8 - Math.floor(size.h / 2),
     };
   }
@@ -230,6 +293,13 @@ function preferredConnectedGridPosition(
   const size = NODE_SIZES[type];
   const sourceCenterY = source.y + Math.floor(source.h / 2);
   const direction = leafDirectionForSlot(slot, branchForNode(node));
+  if (type === "buffer") {
+    const bufferDirection = leafDirectionForSlot(slot, bufferBranchForNode(node));
+    return {
+      x: source.x + source.w + 4,
+      y: sourceCenterY + bufferDirection * 8 - Math.floor(size.h / 2),
+    };
+  }
   if (type === "product") {
     return {
       x: slot.verticalBundle ? source.x : source.x + source.w + 4,
@@ -255,6 +325,9 @@ function preferredConnectedGridPosition(
 }
 
 function searchOptionsForType(type: GridNodeType) {
+  if (type === "buffer") {
+    return { xLimit: 22, yLimit: 24, verticalPenalty: 3 };
+  }
   if (type === "product" || type === "risk" || type === "residue") {
     return { xLimit: 30, yLimit: 28, verticalPenalty: 4 };
   }
@@ -299,7 +372,10 @@ function validateGridLayout(placements: GridPlacement[], edges: ProcessGraphEdge
       return;
     }
     const isLeaf = ["product", "risk", "residue"].includes(destination.type);
-    const isCarryoverPath = source.type === "separator" && destination.type === "equipment";
+    const isCarryoverPath = (
+      (source.type === "separator" && destination.type === "equipment")
+      || (source.graphNode.parameters.role === "carryover" && (destination.type === "equipment" || destination.type === "separator"))
+    );
     const isRecyclePath = source.type === "recycle" || destination.type === "recycle" || isCarryoverPath;
     if (destination.grid.x < source.grid.x && !isLeaf) {
       if (!isRecyclePath) {
@@ -366,8 +442,11 @@ function typeForNode(node: ProcessGraphNode): GridNodeType {
   if (isOperationNodeKind(node.node_kind)) {
     return "equipment";
   }
-  if (node.node_kind === "phase_splitter") {
+  if (node.node_kind === "phase_equilibrator" || node.node_kind === "phase_splitter") {
     return "separator";
+  }
+  if (node.node_kind === "gas_buffer" || node.node_kind === "liquid_buffer") {
+    return "buffer";
   }
   if (node.node_kind === "product_storage") {
     return "product";
@@ -383,7 +462,7 @@ function typeForNode(node: ProcessGraphNode): GridNodeType {
 
 function sortedStageNodes(nodes: ProcessGraphNode[]) {
   return nodes
-    .filter((node) => node.node_kind === "phase_splitter")
+    .filter((node) => node.node_kind === "phase_equilibrator" || node.node_kind === "phase_splitter")
     .sort((left, right) => (stageIndexForNode(left) ?? 0) - (stageIndexForNode(right) ?? 0));
 }
 
@@ -400,12 +479,19 @@ function branchForNode(node: ProcessGraphNode): "gas" | "liquid" {
   return node.parameters.selected_branch === "gas" ? "gas" : "liquid";
 }
 
+function bufferBranchForNode(node: ProcessGraphNode): "gas" | "liquid" {
+  if (node.node_kind === "gas_buffer" || node.parameters.pipe_network === "gas") {
+    return "gas";
+  }
+  return "liquid";
+}
+
 function stageGridForCount(stageCount: number) {
   const lanes = laneCountForStageCount(stageCount);
   const columnStep = columnStepForStageCount(stageCount);
-  const columns = Math.max(1, stageCount);
+  const columns = Math.ceil(Math.max(1, stageCount) / lanes);
   return {
-    width: Math.max(90, 12 + (columns - 1) * columnStep + 44),
+    width: Math.max(150, 12 + (columns - 1) * columnStep + 108),
     height: lanes === 1 ? 62 : lanes === 2 ? 96 : 118,
   };
 }
@@ -414,7 +500,7 @@ function stageSlotForOrder(order: number, stageCount: number, centerY: number): 
   const lanes = laneCountForStageCount(stageCount);
   const stagesPerLane = Math.ceil(Math.max(1, stageCount) / lanes);
   const row = lanes === 1 ? 0 : Math.min(lanes - 1, Math.floor(order / stagesPerLane));
-  const column = order;
+  const column = order % stagesPerLane;
   const columnStep = columnStepForStageCount(stageCount);
   const rowOffsets = rowOffsetsForLanes(lanes);
   const verticalBundle = stageCount > 3;
@@ -437,7 +523,7 @@ function laneCountForStageCount(stageCount: number) {
 }
 
 function columnStepForStageCount(stageCount: number) {
-  return stageCount <= 3 ? 20 : 14;
+  return stageCount <= 3 ? 70 : 56;
 }
 
 function rowOffsetsForLanes(lanes: number) {

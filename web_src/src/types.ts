@@ -88,6 +88,7 @@ export type ProcessGraphNode = {
 export type ProcessGraphEdge = {
   source_node_id: string;
   destination_node_id: string;
+  parameters: Record<string, GraphParameter>;
   stream: Stream | null;
 };
 

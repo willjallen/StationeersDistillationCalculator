@@ -128,9 +128,9 @@ function graphFromStages(items: Stage[]): PlanPayload["graph"] {
         product_purity: item.product_purity,
       },
     });
-    edges.push({ source_node_id: previous, destination_node_id: operationId, stream: feed });
-    edges.push({ source_node_id: operationId, destination_node_id: stageId, stream: feed });
-    edges.push({ source_node_id: stageId, destination_node_id: productId, stream: item.product_stream });
+    edges.push(edge(previous, operationId, feed));
+    edges.push(edge(operationId, stageId, feed));
+    edges.push(edge(stageId, productId, item.product_stream));
     if (item.residue_total_moles > 0 && isFinalStage) {
       nodes.push({
         node_id: residueId,
@@ -144,7 +144,7 @@ function graphFromStages(items: Stage[]): PlanPayload["graph"] {
         },
       });
       unitIndex += 1;
-      edges.push({ source_node_id: stageId, destination_node_id: residueId, stream: item.residue_stream });
+      edges.push(edge(stageId, residueId, item.residue_stream));
     }
     previous = stageId;
     previousStream = item.residue_stream;
@@ -168,6 +168,15 @@ function equipmentKindForStage(input: Stream, item: Stage) {
     return "heater";
   }
   return item.product_branch === "liquid" ? "condensation_valve" : "expansion_valve";
+}
+
+function edge(source: string, destination: string, streamValue: Stream): PlanPayload["graph"]["edges"][number] {
+  return {
+    source_node_id: source,
+    destination_node_id: destination,
+    parameters: {},
+    stream: streamValue,
+  };
 }
 
 function passesFor(index: number) {

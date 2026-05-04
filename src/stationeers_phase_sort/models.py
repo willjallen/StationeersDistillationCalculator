@@ -238,6 +238,7 @@ class ProcessEdge:
     source_node_id: str
     destination_node_id: str
     stream: MaterialStream | None = None
+    parameters: dict[str, float | int | str | bool | None] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)

@@ -58,18 +58,31 @@ def test_webview_plan_payload_is_strict_json_and_diagram_ready() -> None:
     stage_nodes = [
         node
         for node in graph["nodes"]  # type: ignore[index]
-        if node["node_kind"] == "phase_splitter"
+        if node["node_kind"] == "phase_equilibrator"
     ]
     assert "polishing_reached_target" in stage_nodes[0]["parameters"]
     equipment_nodes = [
         node
         for node in graph["nodes"]  # type: ignore[index]
         if node["node_kind"]
-        in {"compressor", "cooler", "heater", "expansion_valve", "condensation_valve"}
+        in {
+            "pressure_increaser",
+            "pressure_decreaser",
+            "cooler",
+            "heater",
+            "expansion_valve",
+            "condensation_valve",
+            "purge_valve",
+        }
     ]
     assert equipment_nodes
     assert "unit_index" in equipment_nodes[0]["parameters"]
-    assert any(node["node_kind"] == "compressor" for node in equipment_nodes)
+    assert any(node["node_kind"] == "pressure_increaser" for node in equipment_nodes)
+    assert any(node["node_kind"] == "condensation_valve" for node in equipment_nodes)
+    assert any(
+        node["node_kind"] in {"gas_buffer", "liquid_buffer"}
+        for node in graph["nodes"]  # type: ignore[index]
+    )
     assert not any(
         node["node_kind"] == "conditioning_valve"
         for node in graph["nodes"]  # type: ignore[index]
@@ -79,11 +92,10 @@ def test_webview_plan_payload_is_strict_json_and_diagram_ready() -> None:
         for node in graph["nodes"]  # type: ignore[index]
     )
     assert any(
-        edge["source_node_id"].startswith("stage_")
-        and (
-            edge["destination_node_id"].startswith("stage_")
-            or edge["destination_node_id"].split("_", 1)[0]
-            in {"compressor", "cooler", "heater", "expansion", "condensation"}
-        )
+        edge["parameters"].get("pipe_network") in {"gas", "liquid"}
+        for edge in graph["edges"]  # type: ignore[index]
+    )
+    assert any(
+        edge["parameters"].get("phase_transfer_device") == "condensation_valve"
         for edge in graph["edges"]  # type: ignore[index]
     )

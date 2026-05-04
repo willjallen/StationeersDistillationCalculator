@@ -98,24 +98,41 @@ function sceneNodeForGraphNode(
       tone: "equipment",
       icon: operationIcon(graphNode),
       title: `${pad(displayIndexForNode(graphNode, node.stageIndex))} ${operationTitle(graphNode)}`,
-      subtitle: `${numberText(paramNumber(graphNode, "output_temperature_kelvin"), 0)} K`,
+      subtitle: operationSubtitle(graphNode),
       lines: [operationSetpointLine(graphNode)],
       selected: node.stageIndex === selectedStageIndex,
       stageIndex: node.stageIndex,
     };
   }
 
-  if (graphNode.node_kind === "phase_splitter") {
+  if (graphNode.node_kind === "phase_equilibrator" || graphNode.node_kind === "phase_splitter") {
     return {
       id: graphNode.node_id,
       rect: node.rect,
       tone: "separator",
       icon: "separator",
-      title: `${pad(node.stageIndex)} Separator`,
+      title: `${pad(node.stageIndex)} Equilibrator`,
       subtitle: `${numberText(paramNumber(graphNode, "temperature_kelvin"), 0)} K`,
       lines: [`${numberText(paramNumber(graphNode, "pressure_kpa"), 0)} kPa`],
       selected: node.stageIndex === selectedStageIndex,
       stageIndex: node.stageIndex,
+    };
+  }
+
+  if (graphNode.node_kind === "gas_buffer" || graphNode.node_kind === "liquid_buffer") {
+    const branch = graphNode.node_kind === "gas_buffer" ? "gas" : "liquid";
+    const role = String(graphNode.parameters.role ?? "buffer");
+    return {
+      id: graphNode.node_id,
+      rect: node.rect,
+      tone: branch,
+      icon: branch === "gas" ? "flame" : "droplet",
+      title: `${titleCase(role)} ${branch === "gas" ? "Gas" : "Liquid"} Tank`,
+      subtitle: `${numberText(paramNumber(graphNode, "total_moles"), 1)} mol`,
+      lines: [`${numberText(paramNumber(graphNode, "pressure_kpa"), 0)} kPa`],
+      selected: node.stageIndex === selectedStageIndex,
+      stageIndex: node.stageIndex,
+      variant: "compact",
     };
   }
 
@@ -280,7 +297,7 @@ function labelPointBetween(source: Rect, destination: Rect): Point {
 
 function sortedStageNodes(nodes: ProcessGraphNode[]) {
   return nodes
-    .filter((node) => node.node_kind === "phase_splitter")
+    .filter((node) => node.node_kind === "phase_equilibrator" || node.node_kind === "phase_splitter")
     .sort((left, right) => (stageIndexForNode(left) ?? 0) - (stageIndexForNode(right) ?? 0));
 }
 
@@ -289,6 +306,12 @@ function isOperationNode(node: ProcessGraphNode) {
 }
 
 function operationTitle(node: ProcessGraphNode) {
+  if (node.node_kind === "pressure_increaser") {
+    return "Pressure In";
+  }
+  if (node.node_kind === "pressure_decreaser") {
+    return "Pressure Out";
+  }
   if (node.node_kind === "compressor") {
     return "Compressor";
   }
@@ -304,11 +327,17 @@ function operationTitle(node: ProcessGraphNode) {
   if (node.node_kind === "condensation_valve") {
     return "Cond. Valve";
   }
+  if (node.node_kind === "purge_valve") {
+    return "Purge Valve";
+  }
+  if (node.node_kind === "pressurant_valve") {
+    return "Pressurant";
+  }
   return "Valve";
 }
 
 function operationIcon(node: ProcessGraphNode) {
-  if (node.node_kind === "compressor") {
+  if (node.node_kind === "compressor" || node.node_kind === "pressure_increaser" || node.node_kind === "pressure_decreaser") {
     return "compressor";
   }
   if (node.node_kind === "cooler") {
@@ -320,7 +349,26 @@ function operationIcon(node: ProcessGraphNode) {
   return "valve";
 }
 
+function operationSubtitle(node: ProcessGraphNode) {
+  const outputTemperature = paramNumber(node, "output_temperature_kelvin");
+  if (outputTemperature !== null) {
+    return `${numberText(outputTemperature, 0)} K`;
+  }
+  const outputPressure = paramNumber(node, "output_pressure_kpa") ?? paramNumber(node, "setpoint_pressure_kpa");
+  if (outputPressure !== null) {
+    return `${numberText(outputPressure, 0)} kPa`;
+  }
+  const heat = paramNumber(node, "external_heat_kj");
+  if (heat !== null) {
+    return `${numberText(heat, 1)} kJ`;
+  }
+  return "Operation";
+}
+
 function operationSetpointLine(node: ProcessGraphNode) {
+  if (node.parameters.role === "phase_hold_delta") {
+    return `${numberText(paramNumber(node, "external_heat_kj"), 1)} kJ hold`;
+  }
   const inputPressure = paramNumber(node, "input_pressure_kpa");
   const outputPressure = paramNumber(node, "output_pressure_kpa");
   if (inputPressure !== null && outputPressure !== null && Math.abs(outputPressure - inputPressure) > 0.25) {
@@ -363,9 +411,9 @@ function edgeTone(
     source.node_kind === "recycle" ||
     destination.node_kind === "polishing_recycle" ||
     source.node_kind === "polishing_recycle" ||
+    source.parameters.role === "carryover" ||
     destination.node_kind === "residue" ||
-    source.node_kind === "residue" ||
-    source.node_kind === "phase_splitter"
+    source.node_kind === "residue"
   ) {
     return "recycle";
   }
@@ -380,6 +428,14 @@ function paramNumber(node: ProcessGraphNode, key: string) {
 
 function displayIndexForNode(node: ProcessGraphNode, fallback: number | undefined) {
   return paramNumber(node, "unit_index") ?? fallback;
+}
+
+function titleCase(value: string) {
+  return value
+    .split(/[_\s-]+/)
+    .filter(Boolean)
+    .map((part) => part[0]?.toUpperCase() + part.slice(1))
+    .join(" ");
 }
 
 function pipeWidth(moles: number) {

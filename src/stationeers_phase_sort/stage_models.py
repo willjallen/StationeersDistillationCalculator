@@ -158,9 +158,13 @@ def stage_from_branch(
             - config.hazard_cost_weight * len(branch.hazard_warnings)
         )
 
-    operation_kind: Literal["condense", "evaporate", "equilibrate"] = (
-        "condense" if branch.product_branch == ProductBranch.LIQUID else "evaporate"
-    )
+    operation_kind: Literal["condense", "evaporate", "equilibrate"]
+    if branch.product_branch == ProductBranch.LIQUID:
+        operation_kind = "condense"
+    elif branch.feed_stream.phase_hint == "liquid":
+        operation_kind = "evaporate"
+    else:
+        operation_kind = "condense"
 
     return StageEvaluation(
         target_name=target_name,

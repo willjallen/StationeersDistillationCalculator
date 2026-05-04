@@ -56,27 +56,33 @@ def test_plan_command_writes_outputs(tmp_path: Path, capsys) -> None:  # type: i
     graph = json.loads(graph_path.read_text(encoding="utf-8"))
     assert graph["nodes"]
     assert graph["edges"]
-    stage_nodes = [node for node in graph["nodes"] if node["node_kind"] == "phase_splitter"]
+    stage_nodes = [node for node in graph["nodes"] if node["node_kind"] == "phase_equilibrator"]
     assert all("solid_risk_total_moles" in node["parameters"] for node in stage_nodes)
     assert all("polishing_reached_target" in node["parameters"] for node in stage_nodes)
     equipment_nodes = [
         node
         for node in graph["nodes"]
         if node["node_kind"]
-        in {"compressor", "cooler", "heater", "expansion_valve", "condensation_valve"}
+        in {
+            "pressure_increaser",
+            "pressure_decreaser",
+            "cooler",
+            "heater",
+            "expansion_valve",
+            "condensation_valve",
+            "purge_valve",
+        }
     ]
     assert equipment_nodes
     assert all("unit_index" in node["parameters"] for node in equipment_nodes)
-    assert any(node["node_kind"] == "compressor" for node in equipment_nodes)
+    assert any(node["node_kind"] == "pressure_increaser" for node in equipment_nodes)
+    assert any(node["node_kind"] == "condensation_valve" for node in equipment_nodes)
+    assert any(node["node_kind"] in {"gas_buffer", "liquid_buffer"} for node in graph["nodes"])
     assert not any(node["node_kind"] == "conditioning_valve" for node in graph["nodes"])
     assert not any(node["node_kind"] == "recycle" for node in graph["nodes"])
+    assert any(edge["parameters"].get("pipe_network") in {"gas", "liquid"} for edge in graph["edges"])
     assert any(
-        edge["source_node_id"].startswith("stage_")
-        and (
-            edge["destination_node_id"].startswith("stage_")
-            or edge["destination_node_id"].split("_", 1)[0]
-            in {"compressor", "cooler", "heater", "expansion", "condensation"}
-        )
+        edge["parameters"].get("phase_transfer_device") == "condensation_valve"
         for edge in graph["edges"]
     )
     assert any(node["node_kind"] == "solid_risk" for node in graph["nodes"])
