@@ -136,6 +136,7 @@ def test_process_graph_expands_liquid_feed_evaporation_with_expansion_transfer()
     assert phase_holders
     assert phase_holders[0].parameters["native_phase_heat_kj"] < 0.0
     assert phase_holders[0].parameters["external_heat_kj"] > 0.0
+    assert phase_holders[0].parameters["output_temperature_kelvin"] == 390.0
 
 
 def _single_stage_plan(stage: StageEvaluation) -> SearchPlan:

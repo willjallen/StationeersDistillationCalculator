@@ -4,6 +4,7 @@ import { numberText, percentText } from "./format";
 import { PlanCanvas } from "./PlanCanvas";
 import { samplePlan } from "./samplePlan";
 import type { CanvasView } from "./canvas/types";
+import { clampCanvasZoom, fitCanvasView, readableCanvasView, zoomPercent, zoomStep } from "./canvas/zoom";
 import type { MetaPayload, PlanPayload, PlanRequest, Stage, Substance } from "./types";
 import "./styles.css";
 
@@ -26,8 +27,6 @@ const eightComponentSelection = [
   "Nitrous Oxide",
   "Pollutant",
 ];
-const defaultCanvasView: CanvasView = { zoom: 1, panX: 0, panY: 0 };
-
 const initialComposition: Record<string, number> = {
   "Carbon Dioxide": 33.333,
   Nitrogen: 33.333,
@@ -68,7 +67,9 @@ function App() {
   const [pressureModel, setPressureModel] = useState<"total" | "partial">("total");
   const [searchMode, setSearchMode] = useState<"greedy" | "beam">("greedy");
   const [selectedStageIndex, setSelectedStageIndex] = useState<number | null>(snapshotMode ? 3 : null);
-  const [canvasView, setCanvasView] = useState<CanvasView>(defaultCanvasView);
+  const [canvasView, setCanvasView] = useState<CanvasView>(
+    snapshotMode ? readableCanvasView(samplePlan) : fitCanvasView,
+  );
   const [inputs, setInputs] = useState({
     totalMoles: 100,
     maximumPressure: 6000,
@@ -231,7 +232,7 @@ function App() {
       }
       setPlan(payload);
       setSelectedStageIndex(payload.stages[0]?.stage_index ?? null);
-      setCanvasView(defaultCanvasView);
+      setCanvasView(readableCanvasView(payload));
       setStatus("Saved 2m ago");
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Planner failed");
@@ -304,7 +305,7 @@ function App() {
       });
       setPlan(nextPlan);
       setSelectedStageIndex(nextPlan.stages[0]?.stage_index ?? null);
-      setCanvasView(defaultCanvasView);
+      setCanvasView(readableCanvasView(nextPlan));
       await nextFrame(2);
 
       const allGasProducts = document.querySelectorAll(".product-pill").length;
@@ -428,11 +429,11 @@ function App() {
             </div>
             <div className="canvas-toolbar">
                 <button type="button" aria-label="Pan"><UiIcon kind="hand" /></button>
-                <button type="button" aria-label="Fit" onClick={() => setCanvasView(defaultCanvasView)}><UiIcon kind="fit" /></button>
+                <button type="button" aria-label="Fit" onClick={() => setCanvasView(fitCanvasView)}><UiIcon kind="fit" /></button>
                 <div className="zoom-group">
-                <button type="button" onClick={() => setCanvasView((current) => ({ ...current, zoom: clamp(current.zoom - 0.1, 0.65, 2.4) }))}>−</button>
-                <span>{Math.round(canvasView.zoom * 100)}%</span>
-                <button type="button" onClick={() => setCanvasView((current) => ({ ...current, zoom: clamp(current.zoom + 0.1, 0.65, 2.4) }))}>+</button>
+                <button type="button" onClick={() => setCanvasView((current) => ({ ...current, zoom: clampCanvasZoom(plan, current.zoom - zoomStep(plan)) }))}>−</button>
+                <span>{zoomPercent(plan, canvasView)}%</span>
+                <button type="button" onClick={() => setCanvasView((current) => ({ ...current, zoom: clampCanvasZoom(plan, current.zoom + zoomStep(plan)) }))}>+</button>
               </div>
             </div>
           </div>
@@ -462,10 +463,6 @@ function ensureComposition(names: string[], current: Record<string, number>) {
     }
   });
   return next;
-}
-
-function clamp(value: number, min: number, max: number) {
-  return Math.max(min, Math.min(max, value));
 }
 
 function nextFrame(count = 1): Promise<void> {
@@ -881,7 +878,7 @@ function Inspector({ stage }: { stage: Stage | null }) {
         <span className={stage.solid_risk_total_moles > 0 ? "status warning" : "status"}>{stage.solid_risk_total_moles > 0 ? "Watch" : "Optimal"}</span>
         <span className="pass">{stage.polishing_passes_needed ?? "—"} pass</span>
       </div>
-      <InfoPair label="Temperature" value={`${numberText(stage.temperature_kelvin, 0)} K`} />
+      <InfoPair label="Temperature" value={temperatureText(stage.temperature_kelvin)} />
       <InfoPair label="Pressure" value={`${numberText(stage.pressure_kpa, 0)} kPa`} />
       <hr />
       <h4>Streams</h4>
@@ -913,6 +910,10 @@ function InfoPair({ label, value }: { label: string; value: string }) {
       <strong>{value}</strong>
     </div>
   );
+}
+
+function temperatureText(kelvin: number) {
+  return `${numberText(kelvin, 0)} K / ${numberText(kelvin - 273.15, 0)} C`;
 }
 
 function BottomProducts({ plan }: { plan: PlanPayload | null }) {

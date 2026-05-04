@@ -235,7 +235,7 @@ function drawBadge(ctx: CanvasRenderingContext2D, scene: CanvasScene, text: stri
 }
 
 function drawMiniMap(ctx: CanvasRenderingContext2D, scene: CanvasScene) {
-  const scale = scene.scale;
+  const scale = 1;
   const x = 18 * scale;
   const y = scene.height - 200 * scale;
   const w = 225 * scale;
@@ -249,7 +249,7 @@ function drawMiniMap(ctx: CanvasRenderingContext2D, scene: CanvasScene) {
   ctx.fill();
   ctx.stroke();
   ctx.fillStyle = canvasTheme.ink;
-  ctx.font = font(scene, 9.8, 650);
+  ctx.font = fixedFont(9.8, 650);
   ctx.fillText("MINIMAP", x + 13 * scale, y + 22 * scale);
   const map = (point: Point) => ({
     x: x + 16 * scale + ((point.x - bounds.x) / bounds.w) * (w - 32 * scale),
@@ -296,7 +296,7 @@ function drawMiniMap(ctx: CanvasRenderingContext2D, scene: CanvasScene) {
 }
 
 function drawZoomControls(ctx: CanvasRenderingContext2D, scene: CanvasScene) {
-  const scale = scene.scale;
+  const scale = 1;
   const x = 258 * scale;
   const y = scene.height - 176 * scale;
   const w = 34 * scale;
@@ -308,7 +308,7 @@ function drawZoomControls(ctx: CanvasRenderingContext2D, scene: CanvasScene) {
   ctx.fill();
   ctx.stroke();
   ctx.fillStyle = canvasTheme.ink;
-  ctx.font = font(scene, 18, 500);
+  ctx.font = fixedFont(18, 500);
   ctx.textAlign = "center";
   ctx.fillText("+", x + w / 2, y + 28 * scale);
   ctx.fillText("-", x + w / 2, y + 67 * scale);
@@ -468,6 +468,10 @@ function fillTrimmedText(
 
 function font(scene: CanvasScene, size: number, weight: number) {
   return `${weight} ${Math.max(8, size * scene.scale)}px Inter, ui-sans-serif, system-ui`;
+}
+
+function fixedFont(size: number, weight: number) {
+  return `${weight} ${Math.max(8, size)}px Inter, ui-sans-serif, system-ui`;
 }
 
 function roundedRect(

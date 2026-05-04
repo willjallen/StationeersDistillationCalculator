@@ -3,6 +3,7 @@ import { drawCanvasScene } from "./canvas/draw";
 import { hitTestStage } from "./canvas/hitTest";
 import { buildPlanScene } from "./canvas/layout";
 import type { CanvasScene, CanvasView } from "./canvas/types";
+import { clampCanvasZoom, zoomStep } from "./canvas/zoom";
 import type { PlanPayload } from "./types";
 
 type Props = {
@@ -168,13 +169,9 @@ export function PlanCanvas({ plan, selectedStageIndex, onSelectStage, view, onVi
         const direction = event.deltaY > 0 ? -1 : 1;
         onViewChange((current) => ({
           ...current,
-          zoom: clamp(current.zoom + direction * 0.1, 0.65, 2.4),
+          zoom: clampCanvasZoom(plan, current.zoom + direction * zoomStep(plan)),
         }));
       }}
     />
   );
-}
-
-function clamp(value: number, min: number, max: number) {
-  return Math.max(min, Math.min(max, value));
 }

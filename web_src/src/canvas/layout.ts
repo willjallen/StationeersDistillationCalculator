@@ -352,7 +352,7 @@ function operationIcon(node: ProcessGraphNode) {
 function operationSubtitle(node: ProcessGraphNode) {
   const outputTemperature = paramNumber(node, "output_temperature_kelvin");
   if (outputTemperature !== null) {
-    return `${numberText(outputTemperature, 0)} K`;
+    return nodeTemperatureText(outputTemperature);
   }
   const outputPressure = paramNumber(node, "output_pressure_kpa") ?? paramNumber(node, "setpoint_pressure_kpa");
   if (outputPressure !== null) {
@@ -367,7 +367,7 @@ function operationSubtitle(node: ProcessGraphNode) {
 
 function operationSetpointLine(node: ProcessGraphNode) {
   if (node.parameters.role === "phase_hold_delta") {
-    return `${numberText(paramNumber(node, "external_heat_kj"), 1)} kJ hold`;
+    return "after phase change";
   }
   const inputPressure = paramNumber(node, "input_pressure_kpa");
   const outputPressure = paramNumber(node, "output_pressure_kpa");
@@ -377,7 +377,7 @@ function operationSetpointLine(node: ProcessGraphNode) {
   const inputTemperature = paramNumber(node, "input_temperature_kelvin");
   const outputTemperature = paramNumber(node, "output_temperature_kelvin");
   if (inputTemperature !== null && outputTemperature !== null && Math.abs(outputTemperature - inputTemperature) > 0.25) {
-    return `${numberText(inputTemperature, 0)} → ${numberText(outputTemperature, 0)} K`;
+    return `from ${nodeTemperatureText(inputTemperature)}`;
   }
   return `${numberText(outputPressure, 0)} kPa`;
 }
@@ -424,6 +424,13 @@ function edgeTone(
 function paramNumber(node: ProcessGraphNode, key: string) {
   const value = node.parameters[key];
   return typeof value === "number" ? value : null;
+}
+
+function nodeTemperatureText(kelvin: number | null) {
+  if (kelvin === null) {
+    return "—";
+  }
+  return `${numberText(kelvin, 0)}K/${numberText(kelvin - 273.15, 0)}C`;
 }
 
 function displayIndexForNode(node: ProcessGraphNode, fallback: number | undefined) {

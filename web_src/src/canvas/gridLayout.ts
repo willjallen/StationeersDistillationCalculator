@@ -32,7 +32,7 @@ export type GridLayoutResult = {
 
 const NODE_SIZES: Record<GridNodeType, { w: number; h: number }> = {
   source: { w: 7, h: 7 },
-  equipment: { w: 11, h: 6 },
+  equipment: { w: 13, h: 6 },
   separator: { w: 12, h: 7 },
   buffer: { w: 11, h: 5 },
   product: { w: 12, h: 6 },
@@ -175,16 +175,16 @@ function equipmentOffset(node: ProcessGraphNode) {
     return 14;
   }
   if (node.parameters.role === "setpoint_delta") {
-    return 27;
+    return 30;
   }
   if (node.node_kind === "expansion_valve") {
-    return 39;
+    return 45;
   }
   if (node.parameters.role === "phase_hold_delta") {
-    return 53;
+    return 65;
   }
   if (node.node_kind === "condensation_valve" || node.node_kind === "purge_valve" || node.node_kind === "pressurant_valve") {
-    return node.parameters.role ? 53 : 27;
+    return node.parameters.role ? 65 : 30;
   }
   return 12;
 }
@@ -232,7 +232,7 @@ function preferredGridPosition(
   }
   if (type === "separator") {
     return {
-      x: slot.baseX + (slot.verticalBundle ? 40 : 40),
+      x: slot.baseX + (slot.verticalBundle ? 50 : 50),
       y: slot.centerY - Math.floor(size.h / 2),
     };
   }
@@ -246,28 +246,28 @@ function preferredGridPosition(
     const branch = bufferBranchForNode(node);
     const direction = leafDirectionForSlot(slot, branch);
     return {
-      x: slot.baseX + (slot.verticalBundle ? 68 : 68),
+      x: slot.baseX + (slot.verticalBundle ? 82 : 82),
       y: slot.centerY + direction * 10 - Math.floor(size.h / 2),
     };
   }
   if (type === "product") {
     const direction = leafDirectionForSlot(slot, branchForNode(node));
     return {
-      x: slot.baseX + (slot.verticalBundle ? 83 : 83),
+      x: slot.baseX + (slot.verticalBundle ? 98 : 98),
       y: slot.centerY + direction * 13 - Math.floor(size.h / 2),
     };
   }
   if (type === "risk") {
     const direction = leafDirectionForSlot(slot, branchForNode(stageNode));
     return {
-      x: slot.baseX + (slot.verticalBundle ? 83 : 83),
+      x: slot.baseX + (slot.verticalBundle ? 98 : 98),
       y: slot.centerY + direction * 20 - Math.floor(size.h / 2),
     };
   }
   if (type === "residue") {
     const direction = leafDirectionForSlot(slot, branchForNode(stageNode));
     return {
-      x: slot.baseX + (slot.verticalBundle ? 83 : 83),
+      x: slot.baseX + (slot.verticalBundle ? 98 : 98),
       y: slot.centerY + direction * 20 - Math.floor(size.h / 2),
     };
   }
@@ -276,7 +276,7 @@ function preferredGridPosition(
       ? leafDirectionForSlot(slot, branchForNode(stageNode))
       : -leafDirectionForSlot(slot, branchForNode(stageNode));
     return {
-      x: slot.baseX + (node.node_kind === "polishing_recycle" ? 79 : 63),
+      x: slot.baseX + (node.node_kind === "polishing_recycle" ? 94 : 78),
       y: slot.centerY + direction * 8 - Math.floor(size.h / 2),
     };
   }
@@ -491,7 +491,7 @@ function stageGridForCount(stageCount: number) {
   const columnStep = columnStepForStageCount(stageCount);
   const columns = Math.ceil(Math.max(1, stageCount) / lanes);
   return {
-    width: Math.max(150, 12 + (columns - 1) * columnStep + 108),
+    width: Math.max(166, 12 + (columns - 1) * columnStep + 126),
     height: lanes === 1 ? 62 : lanes === 2 ? 96 : 118,
   };
 }
@@ -523,7 +523,7 @@ function laneCountForStageCount(stageCount: number) {
 }
 
 function columnStepForStageCount(stageCount: number) {
-  return stageCount <= 3 ? 70 : 56;
+  return stageCount <= 3 ? 84 : 68;
 }
 
 function rowOffsetsForLanes(lanes: number) {
