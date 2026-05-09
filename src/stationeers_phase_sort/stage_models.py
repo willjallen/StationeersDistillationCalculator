@@ -94,6 +94,15 @@ def evaluate_branch(
         + config.stage_pressure_change_cost_weight * pressure_change_cost
         + config.sensible_heat_cost_weight * estimated_sensible_heat
         + config.latent_heat_cost_weight * estimated_latent_heat
+        + config.solid_risk_cost_weight
+        * _minimum_transient_solid_risk_fraction(
+            feed_stream,
+            temperature_kelvin,
+            pressure_kpa,
+            composition,
+            noise,
+            config,
+        )
     )
 
     return BranchEvaluation(
@@ -209,3 +218,31 @@ def evaluate_stage(
         config,
     )
     return stage_from_branch(branch, target_name, config)
+
+
+def _minimum_transient_solid_risk_fraction(
+    feed_stream: MaterialStream,
+    target_temperature_kelvin: float,
+    target_pressure_kpa: float,
+    composition: dict[str, float],
+    noise: ControlNoise,
+    config: PlannerConfig,
+) -> float:
+    if feed_stream.temperature_kelvin is None or feed_stream.pressure_kpa is None:
+        return 0.0
+
+    coldest_temperature = min(feed_stream.temperature_kelvin, target_temperature_kelvin)
+    total_moles = max(feed_stream.total_moles, 1.0e-12)
+    sample_solid_moles = 0.0
+    for name, feed_moles in feed_stream.moles_by_substance_name.items():
+        substance = SUBSTANCES_BY_NAME[name]
+        probability = phase_probability(
+            substance,
+            coldest_temperature,
+            target_pressure_kpa,
+            composition.get(name, 0.0),
+            noise,
+            config,
+        )
+        sample_solid_moles += max(0.0, feed_moles) * probability.solid_probability
+    return sample_solid_moles / total_moles

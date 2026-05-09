@@ -3,9 +3,10 @@ import { createRoot } from "react-dom/client";
 import { numberText, percentText } from "./format";
 import { PlanCanvas } from "./PlanCanvas";
 import { samplePlan } from "./samplePlan";
+import { canonicalGraph, canonicalNodeCount } from "./buildPlanGraph";
 import type { CanvasView } from "./canvas/types";
 import { clampCanvasZoom, fitCanvasView, readableCanvasView, zoomPercent, zoomStep } from "./canvas/zoom";
-import type { MetaPayload, PlanPayload, PlanRequest, Stage, Substance } from "./types";
+import type { BuildPlanEdge, BuildPlanNode, MetaPayload, PlanPayload, PlanRequest, Stage, Substance } from "./types";
 import "./styles.css";
 
 const baseAirSelection = ["Nitrogen", "Oxygen", "Carbon Dioxide"];
@@ -67,6 +68,8 @@ function App() {
   const [pressureModel, setPressureModel] = useState<"total" | "partial">("total");
   const [searchMode, setSearchMode] = useState<"greedy" | "beam">("greedy");
   const [selectedStageIndex, setSelectedStageIndex] = useState<number | null>(snapshotMode ? 3 : null);
+  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
   const [canvasView, setCanvasView] = useState<CanvasView>(
     snapshotMode ? readableCanvasView(samplePlan) : fitCanvasView,
   );
@@ -132,6 +135,30 @@ function App() {
     return plan.stages.find((stage) => stage.stage_index === selectedStageIndex) ?? null;
   }, [plan, selectedStageIndex]);
 
+  const selectedBuildNode = useMemo((): BuildPlanNode | null => {
+    if (!plan?.build_plan.nodes.length) {
+      return null;
+    }
+    if (selectedNodeId) {
+      return plan.build_plan.nodes.find((node) => node.node_id === selectedNodeId) ?? null;
+    }
+    if (selectedStageIndex !== null) {
+      return plan.build_plan.nodes.find(
+        (node) =>
+          node.stage_index === selectedStageIndex &&
+          ["condensation_chamber", "evaporation_chamber", "phase_separator"].includes(node.node_kind),
+      ) ?? null;
+    }
+    return null;
+  }, [plan, selectedNodeId, selectedStageIndex]);
+
+  const selectedBuildEdge = useMemo((): BuildPlanEdge | null => {
+    if (!plan?.build_plan.edges.length || !selectedEdgeId) {
+      return null;
+    }
+    return plan.build_plan.edges.find((edge) => edge.edge_id === selectedEdgeId || edge.id === selectedEdgeId) ?? null;
+  }, [plan, selectedEdgeId]);
+
   useEffect(() => {
     let frame = 0;
     const updateProbe = () => {
@@ -186,6 +213,8 @@ function App() {
       setComposition((current) => ensureComposition(presetSubstances, current));
     }
     setSelectedStageIndex(null);
+    setSelectedNodeId(null);
+    setSelectedEdgeId(null);
   }
 
   function requestPayload(overrides?: {
@@ -232,6 +261,8 @@ function App() {
       }
       setPlan(payload);
       setSelectedStageIndex(payload.stages[0]?.stage_index ?? null);
+      setSelectedNodeId(null);
+      setSelectedEdgeId(null);
       setCanvasView(readableCanvasView(payload));
       setStatus("Saved 2m ago");
     } catch (error) {
@@ -257,7 +288,7 @@ function App() {
   async function runFunctionalSmoke() {
     try {
       const baseProducts = plan?.stages.length ?? 0;
-      const baseGraphNodes = plan?.graph.nodes.length ?? 0;
+      const baseGraphNodes = canonicalNodeCount(plan);
       const allGasSubstances = meta?.presets.find((item) => item.name === "all-gases")?.substances ?? [];
       if (baseProducts < 2 || allGasSubstances.length < 10) {
         throw new Error(`bad setup: baseProducts=${baseProducts}, allGasSubstances=${allGasSubstances.length}`);
@@ -305,6 +336,8 @@ function App() {
       });
       setPlan(nextPlan);
       setSelectedStageIndex(nextPlan.stages[0]?.stage_index ?? null);
+      setSelectedNodeId(null);
+      setSelectedEdgeId(null);
       setCanvasView(readableCanvasView(nextPlan));
       await nextFrame(2);
 
@@ -313,10 +346,11 @@ function App() {
       if (allGasProducts <= baseProducts || checkedFeed < 10) {
         throw new Error(`preset did not expand UI: base=${baseProducts}, all=${allGasProducts}, checked=${checkedFeed}`);
       }
-      if (nextPlan.graph.nodes.length <= baseGraphNodes) {
-        throw new Error(`preset did not expand graph: base=${baseGraphNodes}, all=${nextPlan.graph.nodes.length}`);
+      const nextGraph = canonicalGraph(nextPlan);
+      if (nextGraph.nodes.length <= baseGraphNodes) {
+        throw new Error(`preset did not expand graph: base=${baseGraphNodes}, all=${nextGraph.nodes.length}`);
       }
-      if (!nextPlan.graph.nodes.some((node) => node.node_kind === "condensation_valve")) {
+      if (!nextGraph.nodes.some((node) => node.node_kind === "condensation_valve")) {
         throw new Error("graph is missing condensation valve nodes");
       }
 
@@ -376,7 +410,7 @@ function App() {
         `baseProducts=${baseProducts}`,
         `allGasProducts=${allGasProducts}`,
         `baseGraphNodes=${baseGraphNodes}`,
-        `allGasGraphNodes=${nextPlan.graph.nodes.length}`,
+        `allGasGraphNodes=${nextGraph.nodes.length}`,
         `checkedFeed=${checkedFeed}`,
       ].join(";");
     } catch (error) {
@@ -442,13 +476,15 @@ function App() {
               plan={plan}
               selectedStageIndex={selectedStageIndex}
               onSelectStage={setSelectedStageIndex}
+              onSelectNode={setSelectedNodeId}
+              onSelectEdge={setSelectedEdgeId}
               view={canvasView}
               onViewChange={setCanvasView}
             />
           </div>
         </section>
       </main>
-      <Inspector stage={selectedStage} />
+      <Inspector plan={plan} stage={selectedStage} node={selectedBuildNode} edge={selectedBuildEdge} />
       <BottomProducts plan={plan} />
     </div>
   );
@@ -851,7 +887,101 @@ function KpiIcon({ kind }: { kind: KpiKind }) {
   );
 }
 
-function Inspector({ stage }: { stage: Stage | null }) {
+function Inspector({
+  plan,
+  stage,
+  node,
+  edge,
+}: {
+  plan: PlanPayload | null;
+  stage: Stage | null;
+  node: BuildPlanNode | null;
+  edge: BuildPlanEdge | null;
+}) {
+  if (edge) {
+    return (
+      <aside className="inspector">
+        <div className="inspector-title">
+          <h2>Inspector</h2>
+          <button type="button">×</button>
+        </div>
+        <div className="stage-heading">
+          <h3>{titleCase(edge.edge_kind)}</h3>
+          <span>{edge.network ?? "Stream"}</span>
+        </div>
+        <p>{edge.direction}</p>
+        <hr />
+        <h4>Stream</h4>
+        <InfoPair label="Flow" value={`${numberText(edge.stream?.total_moles ?? null, 1)} mol`} />
+        <InfoPair label="Temperature" value={temperatureTextNullable(edge.stream?.temperature_kelvin ?? null)} />
+        <InfoPair label="Pressure" value={`${numberText(edge.stream?.pressure_kpa ?? null, 0)} kPa`} />
+        <InfoPair label="Controls" value={edge.controlled_by.length ? edge.controlled_by.join(", ") : "—"} />
+        <hr />
+        <h4>Hazards</h4>
+        {edge.hazards.length ? edge.hazards.slice(0, 4).map((hazard) => (
+          <InfoPair key={hazard.id} label={titleCase(hazard.severity)} value={hazard.message} />
+        )) : <InfoPair label="Status" value="No edge hazards" />}
+      </aside>
+    );
+  }
+
+  if (node) {
+    const selectedStage = stage ?? plan?.stages.find((item) => item.stage_index === node.stage_index) ?? null;
+    const status = node.hazards.some((hazard) => hazard.severity === "blocking")
+      ? "Blocked"
+      : node.hazards.length
+        ? "Watch"
+        : "Ready";
+    return (
+      <aside className="inspector">
+        <div className="inspector-title">
+          <h2>Inspector</h2>
+          <button type="button">×</button>
+        </div>
+        <div className="stage-heading">
+          <h3>{node.label}</h3>
+          <span>{node.stage_index ? `Stage ${node.stage_index}` : "Plan"}</span>
+        </div>
+        <p>{node.equipment ?? titleCase(node.node_kind)}</p>
+        <hr />
+        <div className="status-row">
+          <strong>Status</strong>
+          <span className={status === "Ready" ? "status" : "status warning"}>{status}</span>
+          <span className="pass">{node.controls.length} ctl</span>
+        </div>
+        <InfoPair label="Network" value={node.network ?? "—"} />
+        <InfoPair label="Input T" value={temperatureTextNullable(stateNumber(node.state_in, "temperature_kelvin"))} />
+        <InfoPair label="Output T" value={temperatureTextNullable(stateNumber(node.state_out, "temperature_kelvin"))} />
+        <InfoPair label="Input P" value={`${numberText(stateNumber(node.state_in, "pressure_kpa"), 0)} kPa`} />
+        <InfoPair label="Output P" value={`${numberText(stateNumber(node.state_out, "pressure_kpa"), 0)} kPa`} />
+        {selectedStage ? (
+          <>
+            <hr />
+            <h4>Stage Result</h4>
+            <InfoPair label="Target" value={selectedStage.target_name} />
+            <InfoPair label="Purity" value={percentText(selectedStage.polishing_final_purity, 2)} />
+            <InfoPair label="Product" value={`${numberText(selectedStage.product_total_moles, 1)} mol`} />
+          </>
+        ) : null}
+        <hr />
+        <h4>Ramp</h4>
+        <InfoPair label="Path" value={node.ramp ? titleCase(node.ramp.selected_path) : "No state change"} />
+        <InfoPair label="Required" value={node.ramp?.required_equipment.join(", ") || "—"} />
+        <InfoPair label="Blocking" value={node.ramp?.blocking ? "Yes" : "No"} />
+        <hr />
+        <h4>Controls</h4>
+        {node.controls.length ? node.controls.slice(0, 3).map((rule) => (
+          <InfoPair key={rule.id} label={titleCase(rule.variable)} value={rule.action} />
+        )) : <InfoPair label="Rules" value="No active controls" />}
+        <hr />
+        <h4>Hazards</h4>
+        {node.hazards.length ? node.hazards.slice(0, 4).map((hazard) => (
+          <InfoPair key={hazard.id} label={titleCase(hazard.severity)} value={hazard.message} />
+        )) : <InfoPair label="Status" value="No node hazards" />}
+      </aside>
+    );
+  }
+
   if (!stage) {
     return (
       <aside className="inspector">
@@ -914,6 +1044,26 @@ function InfoPair({ label, value }: { label: string; value: string }) {
 
 function temperatureText(kelvin: number) {
   return `${numberText(kelvin, 0)} K / ${numberText(kelvin - 273.15, 0)} C`;
+}
+
+function temperatureTextNullable(kelvin: number | null) {
+  if (kelvin === null) {
+    return "—";
+  }
+  return temperatureText(kelvin);
+}
+
+function stateNumber(state: Record<string, unknown> | null, key: string) {
+  const value = state?.[key];
+  return typeof value === "number" ? value : null;
+}
+
+function titleCase(value: string) {
+  return value
+    .split(/[_\s-]+/)
+    .filter(Boolean)
+    .map((part) => `${part[0]?.toUpperCase() ?? ""}${part.slice(1)}`)
+    .join(" ");
 }
 
 function BottomProducts({ plan }: { plan: PlanPayload | null }) {

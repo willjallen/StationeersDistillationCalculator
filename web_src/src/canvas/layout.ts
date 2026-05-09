@@ -1,4 +1,5 @@
 import { numberText, percentText } from "../format";
+import { canonicalGraph } from "../buildPlanGraph";
 import type { PlanPayload, ProcessGraphEdge, ProcessGraphNode, Stream } from "../types";
 import { centerX, centerY, makeProjector, port } from "./geometry";
 import { gridRectToDesignRect, isOperationNodeKind, layoutProcessGraph, type GridPlacement } from "./gridLayout";
@@ -20,7 +21,7 @@ export function buildPlanScene(
   selectedStageIndex: number | null,
   view: CanvasView = DEFAULT_VIEW,
 ): CanvasScene {
-  if (!plan || plan.stages.length === 0 || !plan.graph?.nodes.length) {
+  if (!plan || plan.stages.length === 0 || !canonicalGraph(plan).nodes.length) {
     return {
       width: viewport.width,
       height: viewport.height,
@@ -33,13 +34,14 @@ export function buildPlanScene(
   }
 
   const gridLayout = layoutProcessGraph(plan);
+  const graph = canonicalGraph(plan);
   const designWidth = Math.max(MIN_DESIGN_W, gridLayout.designWidth);
   const designHeight = Math.max(DESIGN_H, gridLayout.designHeight);
   const project = makeProjector(viewport.width, viewport.height, designWidth, designHeight, view.zoom, view.panX, view.panY);
   const logicalNodes = layoutGraphNodes(gridLayout.placements, project);
   const logicalById = new Map(logicalNodes.map((node) => [node.graphNode.node_id, node]));
   const sceneNodes = logicalNodes.map((node) => sceneNodeForGraphNode(node, plan, selectedStageIndex));
-  const sceneEdges = buildGraphEdges(plan.graph.edges, logicalById, sortedStageNodes(plan.graph.nodes).length);
+  const sceneEdges = buildGraphEdges(graph.edges, logicalById, sortedStageNodes(graph.nodes).length);
 
   return {
     width: viewport.width,
@@ -105,13 +107,19 @@ function sceneNodeForGraphNode(
     };
   }
 
-  if (graphNode.node_kind === "phase_equilibrator" || graphNode.node_kind === "phase_splitter") {
+  if (isSeparatorNode(graphNode)) {
+    const title =
+      graphNode.node_kind === "condensation_chamber"
+        ? "Cond. Chamber"
+        : graphNode.node_kind === "evaporation_chamber"
+          ? "Evap. Chamber"
+          : "Separator";
     return {
       id: graphNode.node_id,
       rect: node.rect,
       tone: "separator",
       icon: "separator",
-      title: `${pad(node.stageIndex)} Equilibrator`,
+      title: `${pad(node.stageIndex)} ${title}`,
       subtitle: `${numberText(paramNumber(graphNode, "temperature_kelvin"), 0)} K`,
       lines: [`${numberText(paramNumber(graphNode, "pressure_kpa"), 0)} kPa`],
       selected: node.stageIndex === selectedStageIndex,
@@ -119,15 +127,15 @@ function sceneNodeForGraphNode(
     };
   }
 
-  if (graphNode.node_kind === "gas_buffer" || graphNode.node_kind === "liquid_buffer") {
-    const branch = graphNode.node_kind === "gas_buffer" ? "gas" : "liquid";
+  if (graphNode.node_kind === "gas_buffer" || graphNode.node_kind === "liquid_buffer" || graphNode.node_kind === "feed_buffer") {
+    const branch = graphNode.node_kind === "liquid_buffer" ? "liquid" : "gas";
     const role = String(graphNode.parameters.role ?? "buffer");
     return {
       id: graphNode.node_id,
       rect: node.rect,
       tone: branch,
       icon: branch === "gas" ? "flame" : "droplet",
-      title: `${titleCase(role)} ${branch === "gas" ? "Gas" : "Liquid"} Tank`,
+      title: graphNode.node_kind === "feed_buffer" ? "Feed Buffer" : `${titleCase(role)} ${branch === "gas" ? "Gas" : "Liquid"} Tank`,
       subtitle: `${numberText(paramNumber(graphNode, "total_moles"), 1)} mol`,
       lines: [`${numberText(paramNumber(graphNode, "pressure_kpa"), 0)} kPa`],
       selected: node.stageIndex === selectedStageIndex,
@@ -136,14 +144,14 @@ function sceneNodeForGraphNode(
     };
   }
 
-  if (graphNode.node_kind === "solid_risk") {
+  if (graphNode.node_kind === "solid_risk" || graphNode.node_kind === "alarm") {
     return {
       id: graphNode.node_id,
       rect: node.rect,
       tone: "risk",
       icon: "risk",
-      title: "Solid Risk",
-      subtitle: `${numberText(paramNumber(graphNode, "total_moles"), 3)} mol`,
+      title: graphNode.node_kind === "alarm" ? "Alarm" : "Solid Risk",
+      subtitle: graphNode.node_kind === "alarm" ? `${numberText(paramNumber(graphNode, "blocking_hazard_count"), 0)} blocking` : `${numberText(paramNumber(graphNode, "total_moles"), 3)} mol`,
       stageIndex: node.stageIndex,
       selected: node.stageIndex === selectedStageIndex,
     };
@@ -165,14 +173,16 @@ function sceneNodeForGraphNode(
     };
   }
 
-  if (graphNode.node_kind === "recycle" || graphNode.node_kind === "residue") {
+  if (graphNode.node_kind === "recycle" || graphNode.node_kind === "residue" || graphNode.node_kind === "recovery_buffer") {
     const isFinalResidue = graphNode.node_kind === "residue";
     return {
       id: graphNode.node_id,
       rect: node.rect,
       tone: isFinalResidue ? "risk" : "recycle",
       icon: isFinalResidue ? "risk" : "recycle",
-      title: isFinalResidue
+      title: graphNode.node_kind === "recovery_buffer"
+        ? "Recovery"
+        : isFinalResidue
         ? "Residue"
         : `${pad(displayIndexForNode(graphNode, node.stageIndex))} Recycle`,
       subtitle: `${numberText(paramNumber(graphNode, "residue_total_moles"), 1)} mol`,
@@ -223,7 +233,7 @@ function edgeFromNodes(
   const tone = edgeTone(graphEdge, source.graphNode, destination.graphNode);
   const moles = graphEdge.stream?.total_moles ?? 0;
   return {
-    id: `${graphEdge.source_node_id}-${graphEdge.destination_node_id}-${index}`,
+    id: typeof graphEdge.parameters.edge_id === "string" ? graphEdge.parameters.edge_id : `${graphEdge.source_node_id}-${graphEdge.destination_node_id}-${index}`,
     tone,
     points: routeBetween(source.rect, destination.rect, tone),
     width: tone === "recycle" ? Math.max(1.35, pipeWidth(moles) * 0.68) : pipeWidth(moles),
@@ -297,8 +307,12 @@ function labelPointBetween(source: Rect, destination: Rect): Point {
 
 function sortedStageNodes(nodes: ProcessGraphNode[]) {
   return nodes
-    .filter((node) => node.node_kind === "phase_equilibrator" || node.node_kind === "phase_splitter")
+    .filter(isSeparatorNode)
     .sort((left, right) => (stageIndexForNode(left) ?? 0) - (stageIndexForNode(right) ?? 0));
+}
+
+function isSeparatorNode(node: ProcessGraphNode) {
+  return ["phase_equilibrator", "phase_splitter", "condensation_chamber", "evaporation_chamber", "phase_separator"].includes(node.node_kind);
 }
 
 function isOperationNode(node: ProcessGraphNode) {
@@ -309,17 +323,26 @@ function operationTitle(node: ProcessGraphNode) {
   if (node.node_kind === "pressure_increaser") {
     return "Pressure In";
   }
+  if (node.node_kind === "pressure_regulator") {
+    return "Regulator";
+  }
   if (node.node_kind === "pressure_decreaser") {
     return "Pressure Out";
+  }
+  if (node.node_kind === "back_pressure_regulator") {
+    return "Back Reg.";
   }
   if (node.node_kind === "compressor") {
     return "Compressor";
   }
-  if (node.node_kind === "cooler") {
+  if (node.node_kind === "cooler" || node.node_kind === "radiator_bank" || node.node_kind === "wall_cooler") {
     return "Cooler";
   }
-  if (node.node_kind === "heater" || node.node_kind === "evaporation_heater") {
+  if (node.node_kind === "heater" || node.node_kind === "evaporation_heater" || node.node_kind === "wall_heater") {
     return "Heater";
+  }
+  if (node.node_kind === "heat_exchanger") {
+    return "Heat Ex.";
   }
   if (node.node_kind === "expansion_valve") {
     return "Expansion Valve";
@@ -337,13 +360,21 @@ function operationTitle(node: ProcessGraphNode) {
 }
 
 function operationIcon(node: ProcessGraphNode) {
-  if (node.node_kind === "compressor" || node.node_kind === "pressure_increaser" || node.node_kind === "pressure_decreaser") {
+  if (
+    node.node_kind === "compressor" ||
+    node.node_kind === "pressure_increaser" ||
+    node.node_kind === "pressure_decreaser" ||
+    node.node_kind === "pressure_regulator" ||
+    node.node_kind === "back_pressure_regulator" ||
+    node.node_kind === "volume_pump" ||
+    node.node_kind === "turbo_volume_pump"
+  ) {
     return "compressor";
   }
-  if (node.node_kind === "cooler") {
+  if (node.node_kind === "cooler" || node.node_kind === "radiator_bank" || node.node_kind === "wall_cooler") {
     return "cooler";
   }
-  if (node.node_kind === "heater" || node.node_kind === "evaporation_heater") {
+  if (node.node_kind === "heater" || node.node_kind === "evaporation_heater" || node.node_kind === "wall_heater" || node.node_kind === "heat_exchanger") {
     return "heater";
   }
   return "valve";
@@ -411,6 +442,8 @@ function edgeTone(
     source.node_kind === "recycle" ||
     destination.node_kind === "polishing_recycle" ||
     source.node_kind === "polishing_recycle" ||
+    destination.node_kind === "recovery_buffer" ||
+    source.node_kind === "recovery_buffer" ||
     source.parameters.role === "carryover" ||
     destination.node_kind === "residue" ||
     source.node_kind === "residue"

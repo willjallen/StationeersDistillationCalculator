@@ -97,12 +97,99 @@ export type ProcessGraph = {
   edges: ProcessGraphEdge[];
 };
 
+export type BuildHazard = {
+  id: string;
+  hazard_id: string;
+  kind: string;
+  severity: "info" | "warning" | "blocking";
+  message: string;
+  stage_index: number | null;
+  node_id: string | null;
+  edge_id: string | null;
+  substance_name: string | null;
+};
+
+export type BuildControlRule = {
+  id: string;
+  rule_id: string;
+  controlled_device_id: string;
+  sensor_node_id: string;
+  variable: string;
+  target: string | number | boolean | null;
+  deadband: number | null;
+  action: string;
+  priority: number;
+  fail_safe_state: string;
+};
+
+export type BuildRampAudit = {
+  audit_id: string;
+  selected_path: string;
+  blocking: boolean;
+  hazards: BuildHazard[];
+  required_equipment: string[];
+  required_controls: string[];
+};
+
+export type BuildPlanNode = {
+  id: string;
+  kind: string;
+  node_id: string;
+  node_kind: string;
+  label: string;
+  stage_index: number | null;
+  equipment: string | null;
+  role: string | null;
+  network: string | null;
+  state_in: Record<string, unknown> | null;
+  state_out: Record<string, unknown> | null;
+  stream_in: Stream | null;
+  stream_out: Stream | null;
+  setpoints: Record<string, GraphParameter>;
+  ramp: BuildRampAudit | null;
+  controls: BuildControlRule[];
+  hazards: BuildHazard[];
+  build_notes: string[];
+  parameters: Record<string, GraphParameter>;
+};
+
+export type BuildPlanEdge = {
+  id: string;
+  kind: string;
+  edge_id: string;
+  edge_kind: string;
+  source_node_id: string;
+  target_node_id: string;
+  destination_node_id: string;
+  stream: Stream | null;
+  network: string | null;
+  direction: string;
+  controlled_by: string[];
+  hazards: BuildHazard[];
+  parameters: Record<string, GraphParameter>;
+};
+
+export type BuildPlan = {
+  request: Record<string, unknown>;
+  assumptions: string[];
+  substances: string[];
+  nodes: BuildPlanNode[];
+  edges: BuildPlanEdge[];
+  stages: Array<Record<string, unknown>>;
+  controllers: BuildControlRule[];
+  hazards: BuildHazard[];
+  startup_sequence: Array<Record<string, unknown>>;
+  shutdown_sequence: Array<Record<string, unknown>>;
+  summary: Record<string, GraphParameter>;
+};
+
 export type PlanPayload = {
   request: Record<string, unknown>;
   initial_stream: Stream;
   summary: PlanSummary;
   stages: Stage[];
   graph: ProcessGraph;
+  build_plan: BuildPlan;
 };
 
 export type PlanRequest = {

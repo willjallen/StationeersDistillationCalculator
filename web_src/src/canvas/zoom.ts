@@ -1,5 +1,6 @@
 import type { CanvasView } from "./types";
 import type { PlanPayload } from "../types";
+import { canonicalNodeCount } from "../buildPlanGraph";
 
 export const fitCanvasView: CanvasView = { zoom: 1, panX: 0, panY: 0 };
 
@@ -8,7 +9,7 @@ export function readableCanvasView(plan: PlanPayload | null): CanvasView {
 }
 
 export function readableZoomBase(plan: PlanPayload | null) {
-  const nodeCount = plan?.graph.nodes.length ?? 0;
+  const nodeCount = canonicalNodeCount(plan);
   if (nodeCount <= 0) {
     return 1;
   }

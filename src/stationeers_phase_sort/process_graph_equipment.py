@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Literal, cast
+
 from stationeers_phase_sort.models import (
     MaterialStream,
     ProcessEdge,
@@ -30,6 +32,10 @@ def stream_with_state(
     pressure_kpa: float | None = None,
     phase_hint: str | None = None,
 ) -> MaterialStream:
+    stream_phase_hint = cast(
+        Literal["gas", "liquid", "mixed", "unknown", "empty"],
+        phase_hint or stream.phase_hint,
+    )
     return MaterialStream(
         dict(stream.moles_by_substance_name),
         temperature_kelvin=(
@@ -37,7 +43,7 @@ def stream_with_state(
         ),
         pressure_kpa=stream.pressure_kpa if pressure_kpa is None else pressure_kpa,
         volume_liters=stream.volume_liters,
-        phase_hint=phase_hint or stream.phase_hint,
+        phase_hint=stream_phase_hint,
     ).without_tiny_entries()
 
 

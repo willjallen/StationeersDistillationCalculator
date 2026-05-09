@@ -241,6 +241,8 @@ def plan_to_process_graph(plan: SearchPlan) -> ProcessGraph:
                     "selected_branch": stage.product_branch.value,
                     "product_total_moles": polished_stream.total_moles,
                     "product_purity": product_purity,
+                    "temperature_kelvin": polished_stream.temperature_kelvin,
+                    "pressure_kpa": polished_stream.pressure_kpa,
                     "pipe_network": stage.product_branch.value,
                 },
             )

@@ -10,6 +10,7 @@ from importlib.resources import files
 from typing import Any
 from urllib.parse import urlparse
 
+from stationeers_phase_sort.build_plan import build_plan_to_json, build_plan_view_model
 from stationeers_phase_sort.models import (
     ControlNoise,
     MaterialStream,
@@ -143,6 +144,17 @@ def build_plan_payload(request: dict[str, Any]) -> dict[str, object]:
         else search_phase_chain_beam(initial_stream, selected_names, noise, config)
     )
 
+    build_plan = build_plan_view_model(
+        plan,
+        initial_stream,
+        {
+            **default_plan_request(),
+            **{key: value for key, value in request.items() if key in default_plan_request()},
+            "substances": selected_names,
+        },
+        config,
+        noise,
+    )
     return {
         "request": {
             **default_plan_request(),
@@ -160,6 +172,7 @@ def build_plan_payload(request: dict[str, Any]) -> dict[str, object]:
             for record in plan.product_records
         ],
         "graph": _graph_to_json(plan_to_process_graph(plan)),
+        "build_plan": build_plan_to_json(build_plan),
     }
 
 

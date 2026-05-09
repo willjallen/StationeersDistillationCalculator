@@ -1,15 +1,18 @@
 import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { drawCanvasScene } from "./canvas/draw";
-import { hitTestStage } from "./canvas/hitTest";
+import { hitTestEdge, hitTestNode } from "./canvas/hitTest";
 import { buildPlanScene } from "./canvas/layout";
 import type { CanvasScene, CanvasView } from "./canvas/types";
 import { clampCanvasZoom, zoomStep } from "./canvas/zoom";
+import { canonicalEdgeCount, canonicalNodeCount } from "./buildPlanGraph";
 import type { PlanPayload } from "./types";
 
 type Props = {
   plan: PlanPayload | null;
   selectedStageIndex: number | null;
   onSelectStage: (stageIndex: number) => void;
+  onSelectNode: (nodeId: string | null) => void;
+  onSelectEdge: (edgeId: string | null) => void;
   view: CanvasView;
   onViewChange: Dispatch<SetStateAction<CanvasView>>;
 };
@@ -23,7 +26,7 @@ type PointerDrag = {
   moved: boolean;
 };
 
-export function PlanCanvas({ plan, selectedStageIndex, onSelectStage, view, onViewChange }: Props) {
+export function PlanCanvas({ plan, selectedStageIndex, onSelectStage, onSelectNode, onSelectEdge, view, onViewChange }: Props) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const sceneRef = useRef<CanvasScene | null>(null);
   const dragRef = useRef<PointerDrag | null>(null);
@@ -50,8 +53,8 @@ export function PlanCanvas({ plan, selectedStageIndex, onSelectStage, view, onVi
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       const scene = buildPlanScene(plan, { width: rect.width, height: rect.height }, selectedStageIndex, view);
       sceneRef.current = scene;
-      canvas.dataset.graphNodeCount = String(plan?.graph.nodes.length ?? 0);
-      canvas.dataset.graphEdgeCount = String(plan?.graph.edges.length ?? 0);
+      canvas.dataset.graphNodeCount = String(canonicalNodeCount(plan));
+      canvas.dataset.graphEdgeCount = String(canonicalEdgeCount(plan));
       canvas.dataset.sceneNodeCount = String(scene.nodes.length);
       canvas.dataset.sceneEdgeCount = String(scene.edges.length);
       canvas.dataset.layoutViolations = scene.layout?.violations.join("|") ?? "";
@@ -88,13 +91,21 @@ export function PlanCanvas({ plan, selectedStageIndex, onSelectStage, view, onVi
       return;
     }
     const rect = canvas.getBoundingClientRect();
-    const stageIndex = hitTestStage(
-      sceneRef.current,
-      clientX - rect.left,
-      clientY - rect.top,
-    );
-    if (stageIndex !== null) {
-      onSelectStage(stageIndex);
+    const x = clientX - rect.left;
+    const y = clientY - rect.top;
+    const node = hitTestNode(sceneRef.current, x, y);
+    if (node) {
+      onSelectNode(node.id);
+      onSelectEdge(null);
+      if (node.stageIndex !== undefined) {
+        onSelectStage(node.stageIndex);
+      }
+      return;
+    }
+    const edgeId = hitTestEdge(sceneRef.current, x, y);
+    if (edgeId !== null) {
+      onSelectNode(null);
+      onSelectEdge(edgeId);
     }
   }
 

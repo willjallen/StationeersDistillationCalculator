@@ -9,6 +9,7 @@ const stages = [
   stage(6, "Nitrous Oxide", "liquid", 16.7, 26.3, 270, 200, 71),
   stage(7, "Pollutant", "liquid", 12.2, 14.1, 270, 200, 54),
 ];
+const graph = graphFromStages(stages);
 
 export const samplePlan: PlanPayload = {
   request: {},
@@ -28,7 +29,8 @@ export const samplePlan: PlanPayload = {
     remaining_targets: [],
   },
   stages,
-  graph: graphFromStages(stages),
+  graph,
+  build_plan: buildPlanFromGraph(graph),
 };
 
 function stage(
@@ -150,6 +152,63 @@ function graphFromStages(items: Stage[]): PlanPayload["graph"] {
     previousStream = item.residue_stream;
   });
   return { nodes, edges };
+}
+
+function buildPlanFromGraph(graphValue: PlanPayload["graph"]): PlanPayload["build_plan"] {
+  return {
+    request: {},
+    assumptions: ["Snapshot data uses the same canonical build-plan shape as live plans."],
+    substances: stages.map((item) => item.target_name),
+    nodes: graphValue.nodes.map((node) => ({
+      id: node.node_id,
+      kind: node.node_kind,
+      node_id: node.node_id,
+      node_kind: node.node_kind,
+      label: String(node.parameters.substance ?? node.parameters.target_substance ?? node.node_kind),
+      stage_index: typeof node.parameters.stage_index === "number" ? node.parameters.stage_index : null,
+      equipment: String(node.parameters.equipment ?? node.node_kind),
+      role: typeof node.parameters.role === "string" ? node.parameters.role : null,
+      network: typeof node.parameters.pipe_network === "string" ? node.parameters.pipe_network : null,
+      state_in: null,
+      state_out: null,
+      stream_in: null,
+      stream_out: null,
+      setpoints: {},
+      ramp: null,
+      controls: [],
+      hazards: [],
+      build_notes: [],
+      parameters: node.parameters,
+    })),
+    edges: graphValue.edges.map((edgeValue, index) => ({
+      id: `snapshot_edge_${index}`,
+      kind: edgeValue.stream?.phase_hint === "liquid" ? "liquid_stream" : "gas_stream",
+      edge_id: `snapshot_edge_${index}`,
+      edge_kind: edgeValue.stream?.phase_hint === "liquid" ? "liquid_stream" : "gas_stream",
+      source_node_id: edgeValue.source_node_id,
+      target_node_id: edgeValue.destination_node_id,
+      destination_node_id: edgeValue.destination_node_id,
+      stream: edgeValue.stream,
+      network: edgeValue.stream?.phase_hint ?? null,
+      direction: "forward",
+      controlled_by: [],
+      hazards: [],
+      parameters: edgeValue.parameters,
+    })),
+    stages: [],
+    controllers: [],
+    hazards: [],
+    startup_sequence: [],
+    shutdown_sequence: [],
+    summary: {
+      node_count: graphValue.nodes.length,
+      edge_count: graphValue.edges.length,
+      controller_count: 0,
+      hazard_count: 0,
+      blocking_hazard_count: 0,
+      warning_hazard_count: 0,
+    },
+  };
 }
 
 function equipmentKindForStage(input: Stream, item: Stage) {

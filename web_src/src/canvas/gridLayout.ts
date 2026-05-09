@@ -1,4 +1,5 @@
 import type { PlanPayload, ProcessGraphEdge, ProcessGraphNode } from "../types";
+import { canonicalGraph } from "../buildPlanGraph";
 import type { Rect } from "./types";
 
 export const GRID_CELL = 12;
@@ -52,7 +53,8 @@ type StageSlot = {
 };
 
 export function layoutProcessGraph(plan: PlanPayload): GridLayoutResult {
-  const stageNodes = sortedStageNodes(plan.graph.nodes);
+  const graph = canonicalGraph(plan);
+  const stageNodes = sortedStageNodes(graph.nodes);
   const stageCount = stageNodes.length;
   const stageGrid = stageGridForCount(stageCount);
   const designGridWidth = stageGrid.width;
@@ -61,9 +63,9 @@ export function layoutProcessGraph(plan: PlanPayload): GridLayoutResult {
   const solver = new GridPlacementSolver(designGridWidth, designGridHeight);
   const placements: GridPlacement[] = [];
   const placementById = new Map<string, GridPlacement>();
-  const incomingByDestination = new Map(plan.graph.edges.map((edge) => [edge.destination_node_id, edge]));
+  const incomingByDestination = new Map(graph.edges.map((edge) => [edge.destination_node_id, edge]));
 
-  const source = plan.graph.nodes.find((node) => node.node_id === "source");
+  const source = graph.nodes.find((node) => node.node_id === "source");
   if (source) {
     placeAndTrack(
       placements,
@@ -76,7 +78,7 @@ export function layoutProcessGraph(plan: PlanPayload): GridLayoutResult {
   const stageSlots = stageNodes.map((_, order) => stageSlotForOrder(order, stageCount, centerY));
   const deferredNodes: ProcessGraphNode[] = [];
 
-  plan.graph.nodes.forEach((node) => {
+  graph.nodes.forEach((node) => {
     if (node.node_id === "source") {
       return;
     }
@@ -133,7 +135,7 @@ export function layoutProcessGraph(plan: PlanPayload): GridLayoutResult {
     placements,
     designWidth: designGridWidth * GRID_CELL,
     designHeight: designGridHeight * GRID_CELL,
-    diagnostics: validateGridLayout(placements, plan.graph.edges),
+    diagnostics: validateGridLayout(placements, graph.edges),
   };
 }
 
@@ -160,8 +162,16 @@ export function isOperationNodeKind(nodeKind: string) {
     "compressor",
     "pressure_increaser",
     "pressure_decreaser",
+    "pressure_regulator",
+    "back_pressure_regulator",
+    "volume_pump",
+    "turbo_volume_pump",
     "cooler",
     "heater",
+    "heat_exchanger",
+    "radiator_bank",
+    "wall_heater",
+    "wall_cooler",
     "expansion_valve",
     "condensation_valve",
     "purge_valve",
@@ -171,7 +181,14 @@ export function isOperationNodeKind(nodeKind: string) {
 }
 
 function equipmentOffset(node: ProcessGraphNode) {
-  if (node.node_kind === "pressure_increaser" || node.node_kind === "pressure_decreaser") {
+  if (
+    node.node_kind === "pressure_increaser" ||
+    node.node_kind === "pressure_decreaser" ||
+    node.node_kind === "pressure_regulator" ||
+    node.node_kind === "back_pressure_regulator" ||
+    node.node_kind === "volume_pump" ||
+    node.node_kind === "turbo_volume_pump"
+  ) {
     return 14;
   }
   if (node.parameters.role === "setpoint_delta") {
@@ -442,16 +459,16 @@ function typeForNode(node: ProcessGraphNode): GridNodeType {
   if (isOperationNodeKind(node.node_kind)) {
     return "equipment";
   }
-  if (node.node_kind === "phase_equilibrator" || node.node_kind === "phase_splitter") {
+  if (isSeparatorNodeKind(node.node_kind)) {
     return "separator";
   }
-  if (node.node_kind === "gas_buffer" || node.node_kind === "liquid_buffer") {
+  if (node.node_kind === "gas_buffer" || node.node_kind === "liquid_buffer" || node.node_kind === "feed_buffer") {
     return "buffer";
   }
   if (node.node_kind === "product_storage") {
     return "product";
   }
-  if (node.node_kind === "solid_risk") {
+  if (node.node_kind === "solid_risk" || node.node_kind === "alarm") {
     return "risk";
   }
   if (node.node_kind === "residue") {
@@ -462,8 +479,12 @@ function typeForNode(node: ProcessGraphNode): GridNodeType {
 
 function sortedStageNodes(nodes: ProcessGraphNode[]) {
   return nodes
-    .filter((node) => node.node_kind === "phase_equilibrator" || node.node_kind === "phase_splitter")
+    .filter((node) => isSeparatorNodeKind(node.node_kind))
     .sort((left, right) => (stageIndexForNode(left) ?? 0) - (stageIndexForNode(right) ?? 0));
+}
+
+function isSeparatorNodeKind(nodeKind: string) {
+  return ["phase_equilibrator", "phase_splitter", "condensation_chamber", "evaporation_chamber", "phase_separator"].includes(nodeKind);
 }
 
 function stageIndexForNode(node: ProcessGraphNode) {
