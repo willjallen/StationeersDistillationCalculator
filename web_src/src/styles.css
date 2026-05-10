@@ -47,6 +47,11 @@ button {
   cursor: pointer;
 }
 
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
 .shell {
   display: grid;
   grid-template-columns: 226px minmax(760px, 1fr) 206px;
@@ -163,6 +168,16 @@ h4 {
   border-radius: 50%;
   background: #bfeee5;
   color: var(--teal);
+}
+
+.save-state.working span {
+  background: #eaf3ff;
+  color: #2479df;
+}
+
+.save-state.warning span {
+  background: #ffe8e8;
+  color: var(--solid);
 }
 
 .top-actions {
@@ -316,15 +331,6 @@ h4 {
   color: #283548;
 }
 
-.link-button {
-  margin-top: 7px;
-  border: 0;
-  background: transparent;
-  color: var(--teal);
-  font-size: 12px;
-  font-weight: 520;
-}
-
 .compact-input {
   display: grid;
   grid-template-columns: 1fr 96px;
@@ -364,7 +370,7 @@ h4 {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 8px;
-  margin-bottom: 10px;
+  margin-bottom: 8px;
 }
 
 .mode-pills button {
@@ -387,30 +393,32 @@ h4 {
   color: white;
 }
 
-.goal-select {
-  display: block;
-  margin-top: 6px;
-}
-
-.goal-select select {
-  width: 100%;
-  height: 32px;
-  border: 1px solid var(--line);
-  border-radius: 7px;
-  background: #fff;
-  color: #475467;
-  font-size: 12px;
-  padding: 0 10px;
-  font-weight: 560;
-}
-
 .optimization-card {
+  display: grid;
+  align-content: start;
   padding-top: 12px;
   padding-bottom: 12px;
 }
 
 .optimization-card h2 {
-  margin-bottom: 8px;
+  margin-bottom: 6px;
+}
+
+.optimization-card .compact-input {
+  margin-top: 1px;
+  margin-bottom: 0;
+}
+
+.setting-label {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.pressure-pills {
+  margin-bottom: 7px;
 }
 
 .main-panel {
@@ -722,27 +730,6 @@ h4 {
   color: var(--liquid);
 }
 
-.outlet button {
-  display: block;
-  margin: 4px 0 0 auto;
-  border: 0;
-  background: transparent;
-  color: var(--teal);
-  font-size: 12px;
-  font-weight: 570;
-}
-
-.detail-button {
-  width: 100%;
-  height: 36px;
-  margin-top: 14px;
-  border: 1px solid var(--line);
-  border-radius: 7px;
-  background: #fff;
-  color: var(--teal);
-  font-weight: 580;
-}
-
 .bottom-products {
   grid-area: bottom;
   display: grid;
@@ -826,6 +813,10 @@ h4 {
   color: var(--gas);
 }
 
+.product-pill .product-icon.energy {
+  color: #d18a00;
+}
+
 .product-pill strong {
   overflow: hidden;
   font-size: 12px;
@@ -859,6 +850,70 @@ h4 {
 .product-total strong {
   font-size: 17px;
   font-weight: 600;
+}
+
+.warning-scroll,
+.bottom-empty {
+  min-width: 0;
+  margin: 12px 18px 13px;
+}
+
+.warning-scroll {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(180px, 240px);
+  gap: 8px;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.warning-pill,
+.bottom-empty {
+  border: 1px solid #f0f3f7;
+  border-radius: 7px;
+  background: #fff;
+}
+
+.warning-pill {
+  padding: 10px 12px;
+}
+
+.warning-pill strong,
+.warning-pill em,
+.bottom-empty strong,
+.bottom-empty em {
+  display: block;
+}
+
+.warning-pill strong,
+.bottom-empty strong {
+  overflow: hidden;
+  color: #1f2a3a;
+  font-size: 12px;
+  font-weight: 610;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.warning-pill em,
+.bottom-empty em {
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 11px;
+  font-style: normal;
+  line-height: 1.35;
+}
+
+.warning-pill.warning strong {
+  color: #a15c00;
+}
+
+.warning-pill.blocking strong {
+  color: var(--solid);
+}
+
+.bottom-empty {
+  padding: 18px;
 }
 
 @media (max-width: 1280px) {

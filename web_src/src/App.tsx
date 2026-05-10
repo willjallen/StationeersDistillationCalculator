@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { numberText, percentText } from "./format";
+import { numberText, percentText, shortName } from "./format";
 import { PlanCanvas } from "./PlanCanvas";
 import { samplePlan } from "./samplePlan";
 import { canonicalGraph, canonicalNodeCount } from "./buildPlanGraph";
@@ -60,7 +60,7 @@ function App() {
   const functionalSmokeRunRef = useRef(false);
   const [meta, setMeta] = useState<MetaPayload | null>(null);
   const [plan, setPlan] = useState<PlanPayload | null>(snapshotMode ? samplePlan : null);
-  const [status, setStatus] = useState(snapshotMode ? "Saved 2m ago" : "Loading");
+  const [status, setStatus] = useState(snapshotMode ? "Snapshot loaded" : "Loading");
   const [running, setRunning] = useState(false);
   const [preset, setPreset] = useState("base-air");
   const [selected, setSelected] = useState<string[]>(snapshotMode ? snapshotSelection : scenarioSelection ?? baseAirSelection);
@@ -107,7 +107,7 @@ function App() {
           setSelected(nextSelection);
           setComposition((current) => ensureComposition(nextSelection, current));
         }
-        setStatus(snapshotMode ? "Saved 2m ago" : "Ready");
+        setStatus(snapshotMode ? "Snapshot loaded" : "Ready");
       })
       .catch((error: Error) => setStatus(error.message));
   }, [scenarioSelection, snapshotMode]);
@@ -264,7 +264,7 @@ function App() {
       setSelectedNodeId(null);
       setSelectedEdgeId(null);
       setCanvasView(readableCanvasView(payload));
-      setStatus("Saved 2m ago");
+      setStatus("Plan ready");
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Planner failed");
     } finally {
@@ -283,6 +283,28 @@ function App() {
       throw new Error("error" in nextPlan ? nextPlan.error : "Planner failed");
     }
     return nextPlan;
+  }
+
+  function exportPlan() {
+    if (!plan) {
+      return;
+    }
+    const blob = new Blob([JSON.stringify(plan, null, 2)], { type: "application/json" });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `stationeers-phase-sort-${safeFilenamePart(preset)}.json`;
+    document.body.append(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => window.URL.revokeObjectURL(url), 0);
+    setStatus("Plan exported");
+  }
+
+  function clearInspector() {
+    setSelectedStageIndex(null);
+    setSelectedNodeId(null);
+    setSelectedEdgeId(null);
   }
 
   async function runFunctionalSmoke() {
@@ -427,7 +449,9 @@ function App() {
         presets={meta?.presets.map((item) => item.name) ?? ["base-air"]}
         status={status}
         running={running}
+        canExport={Boolean(plan)}
         onPreset={handlePresetChange}
+        onExport={exportPlan}
         onRun={() => void runPlan()}
       />
       <aside className="left-panel">
@@ -442,8 +466,10 @@ function App() {
         />
         <Constraints inputs={inputs} updateInput={updateInput} />
         <Optimization
+          inputs={inputs}
           pressureModel={pressureModel}
           searchMode={searchMode}
+          updateInput={updateInput}
           setPressureModel={setPressureModel}
           setSearchMode={setSearchMode}
         />
@@ -462,9 +488,8 @@ function App() {
               </div>
             </div>
             <div className="canvas-toolbar">
-                <button type="button" aria-label="Pan"><UiIcon kind="hand" /></button>
-                <button type="button" aria-label="Fit" onClick={() => setCanvasView(fitCanvasView)}><UiIcon kind="fit" /></button>
-                <div className="zoom-group">
+              <button type="button" aria-label="Fit" onClick={() => setCanvasView(fitCanvasView)}><UiIcon kind="fit" /></button>
+              <div className="zoom-group">
                 <button type="button" onClick={() => setCanvasView((current) => ({ ...current, zoom: clampCanvasZoom(plan, current.zoom - zoomStep(plan)) }))}>−</button>
                 <span>{zoomPercent(plan, canvasView)}%</span>
                 <button type="button" onClick={() => setCanvasView((current) => ({ ...current, zoom: clampCanvasZoom(plan, current.zoom + zoomStep(plan)) }))}>+</button>
@@ -484,7 +509,7 @@ function App() {
           </div>
         </section>
       </main>
-      <Inspector plan={plan} stage={selectedStage} node={selectedBuildNode} edge={selectedBuildEdge} />
+      <Inspector plan={plan} stage={selectedStage} node={selectedBuildNode} edge={selectedBuildEdge} onClear={clearInspector} />
       <BottomProducts plan={plan} />
     </div>
   );
@@ -499,6 +524,27 @@ function ensureComposition(names: string[], current: Record<string, number>) {
     }
   });
   return next;
+}
+
+function safeFilenamePart(value: string) {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "plan";
+}
+
+function statusTone(status: string, running: boolean) {
+  if (running || status === "Loading" || status === "Planning") {
+    return "working";
+  }
+  if (["Ready", "Plan ready", "Plan exported", "Snapshot loaded"].includes(status)) {
+    return "ok";
+  }
+  return "warning";
+}
+
+function statusSymbol(status: string, running: boolean) {
+  if (running || status === "Loading" || status === "Planning") {
+    return "…";
+  }
+  return statusTone(status, running) === "ok" ? "✓" : "!";
 }
 
 function nextFrame(count = 1): Promise<void> {
@@ -547,14 +593,18 @@ function Header({
   presets,
   status,
   running,
+  canExport,
   onPreset,
+  onExport,
   onRun,
 }: {
   preset: string;
   presets: string[];
   status: string;
   running: boolean;
+  canExport: boolean;
   onPreset: (value: string) => void;
+  onExport: () => void;
   onRun: () => void;
 }) {
   return (
@@ -575,10 +625,9 @@ function Header({
           ))}
         </select>
       </label>
-      <div className="save-state"><span>✓</span>{status}</div>
+      <div className={`save-state ${statusTone(status, running)}`}><span>{statusSymbol(status, running)}</span>{status}</div>
       <div className="top-actions">
-        <button type="button"><UiIcon kind="compare" />Compare Plans</button>
-        <button type="button"><UiIcon kind="download" />Export <UiIcon kind="chevron" /></button>
+        <button type="button" onClick={onExport} disabled={!canExport}><UiIcon kind="download" />Export JSON</button>
         <button className="run-plan" type="button" onClick={onRun} disabled={running}>
           <UiIcon kind="play" />{running ? "Planning" : "Run Plan"}
         </button>
@@ -587,17 +636,9 @@ function Header({
   );
 }
 
-type UiIconKind = "compare" | "download" | "chevron" | "play" | "hand" | "fit";
+type UiIconKind = "download" | "play" | "fit";
 
 function UiIcon({ kind }: { kind: UiIconKind }) {
-  if (kind === "compare") {
-    return (
-      <svg className="ui-icon" viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M8 8h9v9H8z" />
-        <path d="M5 5h9v3M5 5v9h3" />
-      </svg>
-    );
-  }
   if (kind === "download") {
     return (
       <svg className="ui-icon" viewBox="0 0 24 24" aria-hidden="true">
@@ -607,27 +648,10 @@ function UiIcon({ kind }: { kind: UiIconKind }) {
       </svg>
     );
   }
-  if (kind === "chevron") {
-    return (
-      <svg className="ui-icon small" viewBox="0 0 24 24" aria-hidden="true">
-        <path d="m7 9 5 5 5-5" />
-      </svg>
-    );
-  }
   if (kind === "play") {
     return (
       <svg className="ui-icon" viewBox="0 0 24 24" aria-hidden="true">
         <path d="m8 5 11 7-11 7z" />
-      </svg>
-    );
-  }
-  if (kind === "hand") {
-    return (
-      <svg className="ui-icon" viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M8.2 12.2V6.8a1.35 1.35 0 0 1 2.7 0v4.5" />
-        <path d="M10.9 11V5.5a1.35 1.35 0 0 1 2.7 0v5.7" />
-        <path d="M13.6 11V7a1.35 1.35 0 0 1 2.7 0v6" />
-        <path d="M16.3 12.7v-2.2a1.3 1.3 0 0 1 2.6 0v3.9c0 4.2-2.4 6.1-6 6.1h-1.1c-2 0-3.5-.8-4.7-2.4L5 15.3a1.4 1.4 0 0 1 2.2-1.7l1.6 1.7" />
       </svg>
     );
   }
@@ -674,7 +698,7 @@ function FeedComposition({
   ];
   return (
     <section className="side-card feed-card">
-      <h2>Feed Composition <span>(mol%)</span></h2>
+      <h2>Feed Composition <span>(relative mol)</span></h2>
       <div className="feed-list">
         {visible.map((substance) => {
           const checked = selected.includes(substance.name);
@@ -697,7 +721,6 @@ function FeedComposition({
           );
         })}
       </div>
-      <button className="link-button" type="button">+ Add Component</button>
     </section>
   );
 }
@@ -737,7 +760,7 @@ function Constraints({
   return (
     <section className="side-card constraints-card">
       <h2>Constraints</h2>
-      <CompactInput label="Total Product" value={inputs.totalMoles} suffix="mol" onChange={(value) => updateInput("totalMoles", value)} />
+      <CompactInput label="Feed Amount" value={inputs.totalMoles} suffix="mol" onChange={(value) => updateInput("totalMoles", value)} />
       <CompactInput label="Max Pressure" value={inputs.maximumPressure} suffix="kPa" onChange={(value) => updateInput("maximumPressure", value)} />
       <CompactInput label="Feed Temp" value={inputs.feedTemperature} suffix="K" onChange={(value) => updateInput("feedTemperature", value)} />
       <CompactInput label="Feed Pressure" value={inputs.feedPressure} suffix="kPa" onChange={(value) => updateInput("feedPressure", value)} />
@@ -780,44 +803,69 @@ function constraintText(value: number) {
 }
 
 function Optimization({
+  inputs,
+  pressureModel,
   searchMode,
+  updateInput,
+  setPressureModel,
   setSearchMode,
 }: {
+  inputs: {
+    totalMoles: number;
+    maximumPressure: number;
+    feedTemperature: number;
+    feedPressure: number;
+    targetPurity: number;
+    maxPasses: number;
+    temperatureGrid: number;
+    pressureGrid: number;
+    temperatureError: number;
+    pressureError: number;
+  };
   pressureModel: "total" | "partial";
   searchMode: "greedy" | "beam";
+  updateInput: (key: keyof typeof inputs, value: number) => void;
   setPressureModel: (value: "total" | "partial") => void;
   setSearchMode: (value: "greedy" | "beam") => void;
 }) {
   return (
     <section className="side-card optimization-card">
-      <h2>Optimization Goal</h2>
+      <h2>Planner Settings</h2>
+      <span className="setting-label">Search Strategy</span>
       <div className="mode-pills secondary">
-        <button className={searchMode === "greedy" ? "active" : ""} type="button" onClick={() => setSearchMode("greedy")}>Purity</button>
-        <button className={searchMode === "beam" ? "active" : ""} type="button" onClick={() => setSearchMode("beam")}>Energy</button>
+        <button className={searchMode === "greedy" ? "active" : ""} type="button" onClick={() => setSearchMode("greedy")}>Greedy</button>
+        <button className={searchMode === "beam" ? "active" : ""} type="button" onClick={() => setSearchMode("beam")}>Beam</button>
       </div>
-      <label className="goal-select">
-        <select defaultValue="purity">
-          <option value="purity">Maximize minimum purity</option>
-          <option value="yield">Maximize recovered moles</option>
-          <option value="risk">Avoid solid formation</option>
-        </select>
-      </label>
+      <span className="setting-label">Pressure Basis</span>
+      <div className="mode-pills pressure-pills">
+        <button className={pressureModel === "total" ? "active" : ""} type="button" onClick={() => setPressureModel("total")}>Total</button>
+        <button className={pressureModel === "partial" ? "active" : ""} type="button" onClick={() => setPressureModel("partial")}>Partial</button>
+      </div>
+      <CompactInput label="Target Purity" value={inputs.targetPurity} suffix="%" onChange={(value) => updateInput("targetPurity", value)} />
     </section>
   );
 }
 
 function KpiStrip({ plan }: { plan: PlanPayload | null }) {
   const summary = plan?.summary;
-  const totalPasses =
-    plan?.stages.reduce((sum, stage) => sum + (stage.polishing_passes_needed ?? 1), 0) ?? 0;
+  const totalPasses = totalPolishingPasses(plan?.stages ?? []);
+  const productFraction =
+    summary && summary.input_total_moles > 0
+      ? summary.product_total_moles / summary.input_total_moles
+      : null;
+  const solidRiskSub = summary
+    ? summary.solid_risk_total_moles > 0
+      ? `${percentText(summary.solid_risk_fraction, 1)} of feed`
+      : "none predicted"
+    : "—";
   return (
     <section className="kpi-strip">
       <Kpi kind="box" label="Products" value={summary ? String(summary.product_count) : "—"} sub="streams" tone="teal" />
       <Kpi kind="shield" label="Worst Purity" value={summary ? percentText(summary.worst_product_purity, 0) : "—"} sub="minimum" tone="teal" />
-      <Kpi kind="flame" label="Total Heat" value={summary ? `${numberText(summary.cumulative_energy_kj, 1)} kJ` : "—"} sub="net added" tone="orange" />
-      <Kpi kind="droplet" label="Total Product Mol" value={summary ? `${numberText(summary.product_total_moles, 0)} mol` : "—"} sub="100% of feed" tone="blue" />
-      <Kpi kind="alert" label="Solid Risk" value={summary ? `${numberText(summary.solid_risk_total_moles, 0)} mol` : "—"} sub="no solids" tone="red" />
-      <Kpi kind="layers" label="Total Passes" value={String(totalPasses || "—")} sub="total" tone="dark" />
+      <Kpi kind="flame" label="Total Heat" value={summary ? `${numberText(summary.cumulative_energy_kj, 1)} kJ` : "—"} sub="estimated duty" tone="orange" />
+      <Kpi kind="droplet" label="Total Product Mol" value={summary ? `${numberText(summary.product_total_moles, 0)} mol` : "—"} sub={productFraction === null ? "—" : `${percentText(productFraction, 0)} of feed`} tone="blue" />
+      <Kpi kind="alert" label="Solid Risk" value={summary ? `${numberText(summary.solid_risk_total_moles, 2)} mol` : "—"} sub={solidRiskSub} tone="red" />
+      <Kpi kind="layers" label="Total Passes" value={numberText(totalPasses, 0)} sub={totalPasses === null && plan?.stages.length ? "target unmet" : "polishing"} tone="dark" />
     </section>
   );
 }
@@ -887,23 +935,32 @@ function KpiIcon({ kind }: { kind: KpiKind }) {
   );
 }
 
+function totalPolishingPasses(stages: Stage[]) {
+  if (!stages.length || stages.some((stage) => stage.polishing_passes_needed === null)) {
+    return null;
+  }
+  return stages.reduce((sum, stage) => sum + (stage.polishing_passes_needed ?? 0), 0);
+}
+
 function Inspector({
   plan,
   stage,
   node,
   edge,
+  onClear,
 }: {
   plan: PlanPayload | null;
   stage: Stage | null;
   node: BuildPlanNode | null;
   edge: BuildPlanEdge | null;
+  onClear: () => void;
 }) {
   if (edge) {
     return (
       <aside className="inspector">
         <div className="inspector-title">
           <h2>Inspector</h2>
-          <button type="button">×</button>
+          <button type="button" aria-label="Clear inspector" onClick={onClear}>×</button>
         </div>
         <div className="stage-heading">
           <h3>{titleCase(edge.edge_kind)}</h3>
@@ -936,7 +993,7 @@ function Inspector({
       <aside className="inspector">
         <div className="inspector-title">
           <h2>Inspector</h2>
-          <button type="button">×</button>
+          <button type="button" aria-label="Clear inspector" onClick={onClear}>×</button>
         </div>
         <div className="stage-heading">
           <h3>{node.label}</h3>
@@ -989,13 +1046,21 @@ function Inspector({
       </aside>
     );
   }
-  const gasFlow = stage.product_branch === "gas" ? stage.product_total_moles : stage.residue_total_moles;
-  const liquidFlow = stage.product_branch === "liquid" ? stage.product_total_moles : stage.residue_total_moles;
+  const productPhase = streamPhaseLabel(stage.product_stream.phase_hint);
+  const residuePhase = streamPhaseLabel(stage.residue_stream.phase_hint);
+  const vaporMoles =
+    (stage.product_stream.phase_hint === "gas" ? stage.product_stream.total_moles : 0) +
+    (stage.residue_stream.phase_hint === "gas" ? stage.residue_stream.total_moles : 0);
+  const stageStatus = stage.solid_risk_total_moles > 0 || stage.hazards.length
+    ? "Watch"
+    : stage.polishing_passes_needed === null
+      ? "Below target"
+      : "Ready";
   return (
     <aside className="inspector">
       <div className="inspector-title">
         <h2>Inspector</h2>
-        <button type="button">×</button>
+        <button type="button" aria-label="Clear inspector" onClick={onClear}>×</button>
       </div>
       <div className="stage-heading">
         <h3>{String(stage.stage_index).padStart(2, "0")} Separator</h3>
@@ -1005,7 +1070,7 @@ function Inspector({
       <hr />
       <div className="status-row">
         <strong>Status</strong>
-        <span className={stage.solid_risk_total_moles > 0 ? "status warning" : "status"}>{stage.solid_risk_total_moles > 0 ? "Watch" : "Optimal"}</span>
+        <span className={stageStatus === "Ready" ? "status" : "status warning"}>{stageStatus}</span>
         <span className="pass">{stage.polishing_passes_needed ?? "—"} pass</span>
       </div>
       <InfoPair label="Temperature" value={temperatureText(stage.temperature_kelvin)} />
@@ -1013,22 +1078,22 @@ function Inspector({
       <hr />
       <h4>Streams</h4>
       <InfoPair label="Inlet" value={`${numberText(stage.feed_total_moles, 1)} mol`} />
-      <InfoPair label="Vapor Fraction" value={numberText(gasFlow / Math.max(stage.feed_total_moles, 1), 2)} />
-      <div className="outlet gas-outlet">
-        <strong>Outlet — Gas</strong>
-        <InfoPair label="Flow" value={`${numberText(gasFlow, 1)} mol`} />
-        <button type="button">See details ›</button>
+      <InfoPair label="Vapor Fraction" value={percentText(vaporMoles / Math.max(stage.feed_total_moles, 1), 1)} />
+      <div className={`outlet ${stage.product_stream.phase_hint === "liquid" ? "liquid-outlet" : "gas-outlet"}`}>
+        <strong>Product — {productPhase}</strong>
+        <InfoPair label="Flow" value={`${numberText(stage.product_stream.total_moles, 1)} mol`} />
+        <InfoPair label="Purity" value={percentText(stage.product_purity, 1)} />
+        <InfoPair label="Main" value={compositionSummary(stage.product_stream)} />
       </div>
-      <div className="outlet liquid-outlet">
-        <strong>Outlet — Liquid</strong>
-        <InfoPair label="Flow" value={`${numberText(liquidFlow, 1)} mol`} />
-        <button type="button">See details ›</button>
+      <div className={`outlet ${stage.residue_stream.phase_hint === "liquid" ? "liquid-outlet" : "gas-outlet"}`}>
+        <strong>Residue — {residuePhase}</strong>
+        <InfoPair label="Flow" value={`${numberText(stage.residue_stream.total_moles, 1)} mol`} />
+        <InfoPair label="Main" value={compositionSummary(stage.residue_stream)} />
       </div>
       <hr />
       <h4>Performance</h4>
-      <InfoPair label="Pressure Drop" value={`${numberText(stage.setpoint_cost * 40, 0)} kPa`} />
+      <InfoPair label="Setpoint Cost" value={numberText(stage.setpoint_cost, 2)} />
       <InfoPair label="Duty" value={stage.estimated_heat_kj > 0 ? `${numberText(stage.estimated_heat_kj, 1)} kJ` : "—"} />
-      <button className="detail-button" type="button">View Stage Details</button>
     </aside>
   );
 }
@@ -1066,34 +1131,159 @@ function titleCase(value: string) {
     .join(" ");
 }
 
+function streamPhaseLabel(phaseHint: string) {
+  return phaseHint === "unknown" ? "Unspecified" : titleCase(phaseHint);
+}
+
+function compositionSummary(stream: Stage["product_stream"]) {
+  if (!stream.composition.length || stream.total_moles <= 0) {
+    return "Empty";
+  }
+  return stream.composition
+    .slice(0, 2)
+    .map((item) => `${shortName(item.name)} ${percentText(item.fraction, 0)}`)
+    .join(", ");
+}
+
+type BottomTab = "products" | "energy" | "warnings";
+
 function BottomProducts({ plan }: { plan: PlanPayload | null }) {
+  const [activeTab, setActiveTab] = useState<BottomTab>("products");
   const stages = plan?.stages ?? [];
   const orderedStages = orderProducts(stages);
+  const warningRows = planWarningRows(plan);
+
+  useEffect(() => {
+    setActiveTab("products");
+  }, [plan]);
+
   return (
     <footer className="bottom-products">
       <nav className="product-tabs">
-        <button className="active" type="button">Products</button>
-        <button type="button">Energy</button>
-        <button type="button">Warnings</button>
+        <button className={activeTab === "products" ? "active" : ""} type="button" onClick={() => setActiveTab("products")}>Products</button>
+        <button className={activeTab === "energy" ? "active" : ""} type="button" onClick={() => setActiveTab("energy")}>Energy</button>
+        <button className={activeTab === "warnings" ? "active" : ""} type="button" onClick={() => setActiveTab("warnings")}>Warnings</button>
       </nav>
-      <div className="product-scroll">
-        {orderedStages.map((stage) => (
-          <div className="product-pill" key={stage.stage_index}>
-            <ProductIcon branch={stage.product_branch} />
-            <strong>{stage.target_name}</strong>
-            <em>{numberText(stage.product_total_moles, 1)} mol</em>
-            <small>{percentText(stage.product_purity, 0)} purity</small>
+      {activeTab === "products" ? (
+        <div className="product-scroll">
+          {orderedStages.map((stage) => (
+            <div className="product-pill" key={stage.stage_index}>
+              <ProductIcon branch={stage.product_branch} />
+              <strong>{stage.target_name}</strong>
+              <em>{numberText(stage.product_total_moles, 1)} mol</em>
+              <small>{percentText(stage.polishing_final_purity, 0)} final purity</small>
+            </div>
+          ))}
+        </div>
+      ) : null}
+      {activeTab === "energy" ? (
+        <div className="product-scroll">
+          {orderedStages.map((stage) => (
+            <div className="product-pill" key={stage.stage_index}>
+              <span className="product-icon energy" aria-hidden="true"><KpiIcon kind="flame" /></span>
+              <strong>{stage.target_name}</strong>
+              <em>{`${numberText(stage.estimated_heat_kj, 1)} kJ`}</em>
+              <small>{numberText(stage.setpoint_cost, 2)} setpoint cost</small>
+            </div>
+          ))}
+        </div>
+      ) : null}
+      {activeTab === "warnings" ? (
+        warningRows.length ? (
+          <div className="warning-scroll">
+            {warningRows.map((warning) => (
+              <div className={`warning-pill ${warning.severity}`} key={warning.id}>
+                <strong>{warning.title}</strong>
+                <em>{warning.detail}</em>
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
-      <div className="product-total">
-        <span>Total Product</span>
-        <strong>{numberText(plan?.summary.product_total_moles ?? null, 0)} mol</strong>
-        <span>Total Passes</span>
-        <strong>{stages.reduce((sum, stage) => sum + (stage.polishing_passes_needed ?? 1), 0)}</strong>
-      </div>
+        ) : (
+          <div className="bottom-empty">
+            <strong>No current warnings</strong>
+            <em>The returned build plan has no hazards or below-target products.</em>
+          </div>
+        )
+      ) : null}
+      <BottomSummary plan={plan} stages={stages} tab={activeTab} warnings={warningRows.length} />
     </footer>
   );
+}
+
+function BottomSummary({
+  plan,
+  stages,
+  tab,
+  warnings,
+}: {
+  plan: PlanPayload | null;
+  stages: Stage[];
+  tab: BottomTab;
+  warnings: number;
+}) {
+  const totalPasses = totalPolishingPasses(stages);
+  if (tab === "energy") {
+    return (
+      <div className="product-total">
+        <span>Total Heat</span>
+        <strong>{plan ? `${numberText(plan.summary.cumulative_energy_kj, 1)} kJ` : "—"}</strong>
+        <span>Setpoint Cost</span>
+        <strong>{numberText(plan?.summary.cumulative_setpoint_cost ?? null, 2)}</strong>
+      </div>
+    );
+  }
+  if (tab === "warnings") {
+    const blocking = plan?.build_plan.hazards.filter((hazard) => hazard.severity === "blocking").length ?? 0;
+    return (
+      <div className="product-total">
+        <span>Warnings</span>
+        <strong>{warnings}</strong>
+        <span>Blocking</span>
+        <strong>{blocking}</strong>
+      </div>
+    );
+  }
+  return (
+    <div className="product-total">
+      <span>Total Product</span>
+      <strong>{numberText(plan?.summary.product_total_moles ?? null, 0)} mol</strong>
+      <span>Total Passes</span>
+      <strong>{numberText(totalPasses, 0)}</strong>
+    </div>
+  );
+}
+
+function planWarningRows(plan: PlanPayload | null) {
+  if (!plan) {
+    return [];
+  }
+  const hazardRows = plan.build_plan.hazards.map((hazard) => ({
+    id: hazard.id,
+    severity: hazard.severity,
+    title: `${titleCase(hazard.severity)}: ${titleCase(hazard.kind)}`,
+    detail: hazard.stage_index ? `Stage ${hazard.stage_index} - ${hazard.message}` : hazard.message,
+  }));
+  const stageRows = plan.stages.flatMap((stage) => [
+    ...stage.hazards.map((hazard, index) => ({
+      id: `stage:${stage.stage_index}:hazard:${index}`,
+      severity: hazard.severity === "blocking" ? "blocking" : "warning",
+      title: `${stage.target_name}: ${hazard.name}`,
+      detail: `${numberText(hazard.threshold_temperature_kelvin, 0)} K threshold`,
+    })),
+    ...stage.solid_risk_by_name.map((risk) => ({
+      id: `stage:${stage.stage_index}:solid:${risk.name}`,
+      severity: "blocking",
+      title: `${stage.target_name}: solid risk`,
+      detail: `${risk.name} ${numberText(risk.moles, 2)} mol`,
+    })),
+  ]);
+  const belowTargetRows = plan.summary.products_below_target.map((product) => ({
+    id: `below-target:${product.name}`,
+    severity: "warning",
+    title: `${product.name}: below target purity`,
+    detail: `${percentText(product.final_purity, 2)} final purity`,
+  }));
+  return [...hazardRows, ...stageRows, ...belowTargetRows];
 }
 
 function ProductIcon({ branch }: { branch: Stage["product_branch"] }) {
