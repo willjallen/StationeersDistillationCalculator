@@ -65,7 +65,6 @@ function App() {
   const [preset, setPreset] = useState("base-air");
   const [selected, setSelected] = useState<string[]>(snapshotMode ? snapshotSelection : scenarioSelection ?? baseAirSelection);
   const [composition, setComposition] = useState<Record<string, number>>(initialComposition);
-  const [pressureModel, setPressureModel] = useState<"total" | "partial">("total");
   const [searchMode, setSearchMode] = useState<"greedy" | "beam">("greedy");
   const [selectedStageIndex, setSelectedStageIndex] = useState<number | null>(snapshotMode ? 3 : null);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
@@ -234,7 +233,7 @@ function App() {
       total_moles: inputs.totalMoles,
       initial_temperature_kelvin: inputs.feedTemperature,
       initial_pressure_kpa: inputs.feedPressure,
-      pressure_model: pressureModel,
+      pressure_model: "total",
       maximum_pressure_kpa: inputs.maximumPressure,
       temperature_error_kelvin: inputs.temperatureError,
       pressure_error_fraction: inputs.pressureError / 100,
@@ -467,10 +466,8 @@ function App() {
         <Constraints inputs={inputs} updateInput={updateInput} />
         <Optimization
           inputs={inputs}
-          pressureModel={pressureModel}
           searchMode={searchMode}
           updateInput={updateInput}
-          setPressureModel={setPressureModel}
           setSearchMode={setSearchMode}
         />
       </aside>
@@ -804,10 +801,8 @@ function constraintText(value: number) {
 
 function Optimization({
   inputs,
-  pressureModel,
   searchMode,
   updateInput,
-  setPressureModel,
   setSearchMode,
 }: {
   inputs: {
@@ -822,10 +817,8 @@ function Optimization({
     temperatureError: number;
     pressureError: number;
   };
-  pressureModel: "total" | "partial";
   searchMode: "greedy" | "beam";
   updateInput: (key: keyof typeof inputs, value: number) => void;
-  setPressureModel: (value: "total" | "partial") => void;
   setSearchMode: (value: "greedy" | "beam") => void;
 }) {
   return (
@@ -836,11 +829,7 @@ function Optimization({
         <button className={searchMode === "greedy" ? "active" : ""} type="button" onClick={() => setSearchMode("greedy")}>Greedy</button>
         <button className={searchMode === "beam" ? "active" : ""} type="button" onClick={() => setSearchMode("beam")}>Beam</button>
       </div>
-      <span className="setting-label">Pressure Basis</span>
-      <div className="mode-pills pressure-pills">
-        <button className={pressureModel === "total" ? "active" : ""} type="button" onClick={() => setPressureModel("total")}>Total</button>
-        <button className={pressureModel === "partial" ? "active" : ""} type="button" onClick={() => setPressureModel("partial")}>Partial</button>
-      </div>
+      <InfoPair label="Pressure Basis" value="Total network pressure" />
       <CompactInput label="Target Purity" value={inputs.targetPurity} suffix="%" onChange={(value) => updateInput("targetPurity", value)} />
     </section>
   );

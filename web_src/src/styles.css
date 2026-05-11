@@ -417,10 +417,6 @@ h4 {
   font-weight: 600;
 }
 
-.pressure-pills {
-  margin-bottom: 7px;
-}
-
 .main-panel {
   grid-area: main;
   display: grid;

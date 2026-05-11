@@ -199,7 +199,7 @@ export type PlanRequest = {
   total_moles: number;
   initial_temperature_kelvin: number;
   initial_pressure_kpa: number;
-  pressure_model: "total" | "partial";
+  pressure_model: "total";
   maximum_pressure_kpa: number;
   temperature_error_kelvin: number;
   pressure_error_fraction: number;

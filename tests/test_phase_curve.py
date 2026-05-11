@@ -28,6 +28,18 @@ def test_below_melting_reports_solid_risk() -> None:
     assert result.vapor_pressure_kpa is None
 
 
+def test_above_max_liquid_temperature_is_non_condensable() -> None:
+    oxygen = SUBSTANCES_BY_NAME["Oxygen"]
+    assert oxygen.maximum_liquid_temperature_kelvin is not None
+
+    result = PhaseCurve(oxygen).vapor_pressure_kpa(
+        oxygen.maximum_liquid_temperature_kelvin + 0.1
+    )
+
+    assert result.status == BoundaryStatus.NON_CONDENSABLE
+    assert result.vapor_pressure_kpa == math.inf
+
+
 def test_phase_curve_uses_injected_curve_points() -> None:
     oxygen = SUBSTANCES_BY_NAME["Oxygen"]
     assert oxygen.melting_temperature_kelvin is not None

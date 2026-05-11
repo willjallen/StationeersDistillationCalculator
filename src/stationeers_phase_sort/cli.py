@@ -58,11 +58,6 @@ def build_parser() -> argparse.ArgumentParser:
     plan_parser.add_argument("--total-moles", type=float, default=100.0)
     plan_parser.add_argument("--initial-temperature-kelvin", type=float, default=293.15)
     plan_parser.add_argument("--initial-pressure-kpa", type=float, default=100.0)
-    plan_parser.add_argument(
-        "--pressure-model",
-        choices=[model.value for model in PressureModel],
-        default=PressureModel.TOTAL.value,
-    )
     plan_parser.add_argument("--maximum-pressure-kpa", type=float, default=6000.0)
     plan_parser.add_argument("--temperature-error-kelvin", type=float, default=0.50)
     plan_parser.add_argument("--pressure-error-fraction", type=float, default=0.01)
@@ -134,7 +129,7 @@ def run_plan(arguments: argparse.Namespace) -> int:
     )
 
     config = PlannerConfig(
-        pressure_model=PressureModel(arguments.pressure_model),
+        pressure_model=PressureModel.TOTAL,
         maximum_process_pressure_kpa=arguments.maximum_pressure_kpa,
         target_final_purity=arguments.target_purity,
         maximum_polishing_passes=arguments.maximum_polishing_passes,

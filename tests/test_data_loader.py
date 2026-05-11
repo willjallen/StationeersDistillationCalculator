@@ -40,7 +40,7 @@ def test_named_presets_load() -> None:
         ("Oxygen", 56.416, 162.2, 6000.0, 0.8),
         ("Polluted Water", 276.15, 629.0, 6000.0, 8.0),
         ("Pollutant", 173.32, 425.0, 6000.0, 2.0),
-        ("Sodium Chloride", 605.903458297, 2799.31057833, 515.0, 1.0),
+        ("Sodium Chloride", 605.903458297, 2799.31057833, 515.0, 16.0),
         ("Water", 273.15, 643.0, 6000.0, 8.0),
     ],
 )
@@ -61,3 +61,10 @@ def test_sourced_stationeers_phase_constants(
     )
     assert substance.maximum_liquid_pressure_kpa == pytest.approx(maximum_liquid_pressure_kpa)
     assert substance.molar_latent_heat_kj_per_mol == pytest.approx(latent_heat_kj_per_mol)
+
+
+def test_stationpedia_sodium_chloride_heat_constants() -> None:
+    sodium_chloride = SUBSTANCES_BY_NAME["Sodium Chloride"]
+
+    assert sodium_chloride.molar_heat_of_fusion_kj_per_mol == pytest.approx(16.0)
+    assert sodium_chloride.molar_latent_heat_kj_per_mol == pytest.approx(16.0)

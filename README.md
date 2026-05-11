@@ -5,12 +5,20 @@ with phase-change mechanics instead of filtration blocks.
 
 The package supports:
 
-- total-pressure and partial-pressure phase models
+- Stationeers-style total network pressure phase changes
 - control-noise-aware phase probabilities
 - greedy and beam-search chain planning
 - polishing pass estimates
 - CSV, Markdown, and process-graph JSON outputs
 - package data for substances, calibration points, hazards, and presets
+
+## Physics Source
+
+The solver models Stationeers phase changes as game mechanics, not real-world
+thermodynamics. The normal planner uses total network pressure for saturation
+because Stationeers saturation checks do not scale with the gas mixture
+percentage. Packaged substance constants are sourced from the Stationeers
+Community Wiki's Stationpedia-derived gas and liquid phase-change tables.
 
 ## Usage
 

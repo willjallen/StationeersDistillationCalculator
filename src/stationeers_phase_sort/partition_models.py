@@ -21,8 +21,6 @@ def effective_pressure_kpa(
 ) -> float:
     if pressure_model == PressureModel.TOTAL:
         return max(total_pressure_kpa, 1.0e-12)
-    if pressure_model == PressureModel.PARTIAL:
-        return max(total_pressure_kpa * max(mole_fraction, 0.0), 1.0e-12)
     raise ValueError(f"Unknown pressure model: {pressure_model}")
 
 

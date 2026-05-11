@@ -201,13 +201,13 @@
   formula: NaCl
   phase_change_enabled: true
   molar_heat_capacity_j_per_mol_kelvin: 130.0
-  molar_heat_of_fusion_kj_per_mol: 1.0
+  molar_heat_of_fusion_kj_per_mol: 16.0
   melting_temperature_kelvin: 605.903458297
   boiling_temperature_kelvin_at_100_kpa: 1591.0
   minimum_condensation_pressure_kpa: 6.3
   maximum_liquid_temperature_kelvin: 2799.31057833
   maximum_liquid_pressure_kpa: 515.0
-  molar_latent_heat_kj_per_mol: 1.0
+  molar_latent_heat_kj_per_mol: 16.0
   liquid_molar_volume_l_per_mol: 0.04
   molar_mass_g_per_mol: 101.0
   hazard_tags: [corrosive]

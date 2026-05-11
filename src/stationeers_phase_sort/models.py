@@ -7,7 +7,6 @@ from typing import Literal
 
 class PressureModel(StrEnum):
     TOTAL = "total"
-    PARTIAL = "partial"
 
 
 class ProductBranch(StrEnum):
