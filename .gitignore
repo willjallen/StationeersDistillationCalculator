@@ -12,3 +12,4 @@ build/
 playwright-report/
 test-results/
 webui-*.png
+.idea/
